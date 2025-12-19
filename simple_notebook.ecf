@@ -43,6 +43,13 @@
 		<cluster name="src" location=".\src\" recursive="true"/>
 	</target>
 
+	<target name="notebook_cli" extends="simple_notebook">
+		<description>Interactive CLI for Eiffel notebook</description>
+		<root class="NOTEBOOK_CLI" feature="make"/>
+
+		<cluster name="cli" location=".\cli\"/>
+	</target>
+
 	<target name="simple_notebook_tests" extends="simple_notebook">
 		<description>Test suite for simple_notebook core engine</description>
 		<root class="TEST_APP" feature="make"/>
