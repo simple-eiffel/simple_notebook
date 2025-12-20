@@ -11,6 +11,9 @@ Documentation/
 *.so
 *.dylib
 
+# But include installer releases
+!installer/*.exe
+
 # Backup files
 *.swp
 *.bak

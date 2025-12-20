@@ -110,35 +110,65 @@ feature -- Commands
 feature -- Output
 
 	formatted_message: STRING
-			-- Nicely formatted error message
+			-- Nicely formatted error message with source context
+		local
+			l_trimmed: STRING
+			l_indent: INTEGER
 		do
-			create Result.make (200)
+			create Result.make (300)
 
+			-- Header: Error in cell [N], line M:
 			if is_mapped then
 				Result.append ("Error in cell [")
-				Result.append (cell_id)
+				Result.append (cell_id_number)
 				Result.append ("], line ")
 				Result.append (cell_line.out)
 				Result.append (":%N")
 			else
 				Result.append ("Error at line ")
 				Result.append (generated_line.out)
-				Result.append (" in ")
-				Result.append (class_name)
+				if not class_name.is_empty then
+					Result.append (" in ")
+					Result.append (class_name)
+				end
 				Result.append (":%N")
 			end
 
+			-- Error message
 			Result.append ("  ")
 			Result.append (error_code)
 			Result.append (": ")
-			Result.append (message)
+			Result.append (clean_message)
 			Result.append ("%N")
 
+			-- Source line with indicator
 			if not source_line.is_empty then
-				Result.append ("%N  |  ")
-				Result.append (source_line)
+				l_trimmed := source_line.twin
+				l_indent := leading_spaces (source_line)
+				l_trimmed.left_adjust
+
+				Result.append ("%N     |  ")
+				Result.append (l_trimmed)
+				Result.append ("%N     |  ")
+				Result.append (underline_for_error (l_trimmed))
 				Result.append ("%N")
 			end
+		end
+
+	formatted_message_compact: STRING
+			-- Compact format: cell[N]:line: CODE: message
+		do
+			create Result.make (150)
+			if is_mapped then
+				Result.append ("cell[")
+				Result.append (cell_id_number)
+				Result.append ("]:")
+				Result.append (cell_line.out)
+				Result.append (": ")
+			end
+			Result.append (error_code)
+			Result.append (": ")
+			Result.append (clean_message)
 		end
 
 	short_message: STRING
@@ -147,7 +177,114 @@ feature -- Output
 			create Result.make (100)
 			Result.append (error_code)
 			Result.append (": ")
-			Result.append (message)
+			Result.append (clean_message)
+		end
+
+feature {NONE} -- Formatting Helpers
+
+	cell_id_number: STRING
+			-- Extract just the number from cell_id (e.g., "cell_001" -> "1")
+		local
+			l_num: STRING
+			i: INTEGER
+		do
+			-- Find the numeric part
+			create l_num.make_empty
+			from i := cell_id.count until i < 1 or else not cell_id.item (i).is_digit loop
+				l_num.prepend_character (cell_id.item (i))
+				i := i - 1
+			end
+			if l_num.is_empty then
+				Result := cell_id
+			else
+				-- Remove leading zeros
+				from until l_num.is_empty or else l_num.item (1) /= '0' or else l_num.count = 1 loop
+					l_num.remove_head (1)
+				end
+				Result := l_num
+			end
+		end
+
+	clean_message: STRING
+			-- Clean up error message (trim, single line)
+		local
+			l_newline_pos: INTEGER
+		do
+			Result := message.twin
+			Result.left_adjust
+			Result.right_adjust
+			-- Take only first line if multi-line
+			l_newline_pos := Result.index_of ('%N', 1)
+			if l_newline_pos > 0 then
+				Result := Result.substring (1, l_newline_pos - 1)
+			end
+		end
+
+	leading_spaces (a_line: STRING): INTEGER
+			-- Count leading spaces/tabs
+		local
+			i: INTEGER
+		do
+			from i := 1 until i > a_line.count or else not a_line.item (i).is_space loop
+				Result := Result + 1
+				i := i + 1
+			end
+		end
+
+	underline_for_error (a_line: STRING): STRING
+			-- Create underline indicator for error
+			-- Uses ^^^^ for now (could be enhanced to target specific tokens)
+		local
+			l_len: INTEGER
+		do
+			create Result.make (a_line.count)
+			-- Find first identifier or meaningful content
+			l_len := meaningful_token_length (a_line)
+			if l_len = 0 then
+				l_len := a_line.count.min (20)
+			end
+			Result.append (create {STRING}.make_filled ('^', l_len))
+		end
+
+	meaningful_token_length (a_line: STRING): INTEGER
+			-- Length of first meaningful token (identifier, operator, etc.)
+			-- For smarter underlining
+		local
+			i, l_start: INTEGER
+			l_in_token: BOOLEAN
+		do
+			-- Skip leading whitespace (already trimmed, but just in case)
+			from i := 1 until i > a_line.count or else not a_line.item (i).is_space loop
+				i := i + 1
+			end
+			l_start := i
+
+			-- Find end of first token (identifier, number, or operator sequence)
+			if i <= a_line.count then
+				if a_line.item (i).is_alpha or a_line.item (i) = '_' then
+					-- Identifier
+					from until i > a_line.count or else not (a_line.item (i).is_alpha_numeric or a_line.item (i) = '_') loop
+						i := i + 1
+					end
+				elseif a_line.item (i).is_digit then
+					-- Number
+					from until i > a_line.count or else not a_line.item (i).is_digit loop
+						i := i + 1
+					end
+				else
+					-- Operator or punctuation - take one or two chars
+					i := i + 1
+					if i <= a_line.count and then not a_line.item (i).is_alpha_numeric then
+						i := i + 1
+					end
+				end
+			end
+
+			Result := i - l_start
+			if Result < 3 then
+				-- Minimum underline length
+				Result := a_line.count.min (10)
+			end
 		end
 
 invariant

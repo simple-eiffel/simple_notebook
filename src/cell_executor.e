@@ -171,6 +171,8 @@ feature {NONE} -- Compilation
 				create Result.make_success (l_exe_path, l_elapsed_ms)
 			else
 				-- Compilation failed - parse errors from output
+				-- LOG to file for debugging
+				log_compile_failure (l_cmd, l_stdout, l_stderr)
 				create Result.make (False, l_stdout, l_stderr)
 				Result.set_compilation_time_ms (l_elapsed_ms)
 				Result.errors.append (error_parser.parse_errors (l_stdout + "%N" + l_stderr))
@@ -299,6 +301,27 @@ feature {NONE} -- Implementation
 
 	process: SIMPLE_PROCESS
 			-- Process executor
+
+
+feature {NONE} -- Debugging
+
+	log_compile_failure (a_cmd: STRING; a_stdout: STRING; a_stderr: STRING)
+			-- Log compilation failure for debugging
+		local
+			l_file: SIMPLE_FILE
+			l_content: STRING
+		do
+			create l_content.make (2000)
+			l_content.append ("=== COMPILE FAILURE LOG ===%N")
+			l_content.append ("Command: " + a_cmd + "%N%N")
+			l_content.append ("=== STDOUT (" + a_stdout.count.out + " chars) ===%N")
+			l_content.append (a_stdout)
+			l_content.append ("%N%N=== STDERR (" + a_stderr.count.out + " chars) ===%N")
+			l_content.append (a_stderr)
+			l_content.append ("%N=== END LOG ===%N")
+			create l_file.make (workspace_path.name.to_string_8 + "/compile_debug.log")
+			l_file.set_content (l_content).do_nothing
+		end
 
 invariant
 	config_not_void: config /= Void

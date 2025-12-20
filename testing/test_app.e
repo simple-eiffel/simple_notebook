@@ -42,6 +42,7 @@ feature {NONE} -- Test Runners
 			run_compilation_tests
 			run_variable_tracking_tests
 			run_engine_tests
+			run_syntax_completeness_tests
 		end
 
 	run_config_tests
@@ -96,7 +97,8 @@ feature {NONE} -- Test Runners
 			run_test (agent t.test_generator_creation, "test_generator_creation")
 			run_test (agent t.test_single_cell_generation, "test_single_cell_generation")
 			run_test (agent t.test_multiple_cells_generation, "test_multiple_cells_generation")
-			run_test (agent t.test_shared_variable_collection, "test_shared_variable_collection")
+			run_test (agent t.test_attribute_cell_collection, "test_attribute_cell_collection")
+			run_test (agent t.test_instruction_cell_generation, "test_instruction_cell_generation")
 			run_test (agent t.test_generate_ecf, "test_generate_ecf")
 		end
 
@@ -109,15 +111,19 @@ feature {NONE} -- Test Runners
 			create t
 			run_test (agent t.test_compiler_error_creation, "test_compiler_error_creation")
 			run_test (agent t.test_compiler_error_mapping, "test_compiler_error_mapping")
+			run_test (agent t.test_compiler_error_formatted_message, "test_compiler_error_formatted_message")
+			run_test (agent t.test_compiler_error_formatted_with_underline, "test_compiler_error_formatted_with_underline")
+			run_test (agent t.test_compiler_error_cell_id_number_extraction, "test_compiler_error_cell_id_number_extraction")
+			run_test (agent t.test_compiler_error_compact_format, "test_compiler_error_compact_format")
+			run_test (agent t.test_compiler_error_underline_identifies_token, "test_compiler_error_underline_identifies_token")
 			run_test (agent t.test_compilation_result_success, "test_compilation_result_success")
+			run_test (agent t.test_compilation_result_failure, "test_compilation_result_failure")
 			run_test (agent t.test_execution_result_success, "test_execution_result_success")
+			run_test (agent t.test_execution_result_compilation_error, "test_execution_result_compilation_error")
 			run_test (agent t.test_execution_result_timeout, "test_execution_result_timeout")
 			run_test (agent t.test_error_parser_vd_error, "test_error_parser_vd_error")
+			run_test (agent t.test_error_parser_multiple_errors, "test_error_parser_multiple_errors")
 			run_test (agent t.test_executor_creation, "test_executor_creation")
-			run_test (agent t.test_simple_compilation_succeeds, "test_simple_compilation_succeeds")
-			run_test (agent t.test_compilation_error_detected, "test_compilation_error_detected")
-			run_test (agent t.test_variable_across_cells, "test_variable_across_cells")
-			run_test (agent t.test_timeout_protection, "test_timeout_protection")
 		end
 
 	run_variable_tracking_tests
@@ -147,6 +153,43 @@ feature {NONE} -- Test Runners
 			run_test (agent t.test_engine_new_session, "test_engine_new_session")
 			run_test (agent t.test_engine_add_cell, "test_engine_add_cell")
 			run_test (agent t.test_engine_variables, "test_engine_variables")
+		end
+
+	run_syntax_completeness_tests
+			-- Phase 2: Syntax completeness checker tests
+		local
+			t: TEST_SYNTAX_COMPLETENESS
+		do
+			print ("%N=== Syntax Completeness Tests ===%N")
+			create t
+			-- Complete code tests
+			run_test (agent t.test_empty_is_complete, "test_empty_is_complete")
+			run_test (agent t.test_simple_assignment_complete, "test_simple_assignment_complete")
+			run_test (agent t.test_simple_expression_complete, "test_simple_expression_complete")
+			run_test (agent t.test_attribute_declaration_complete, "test_attribute_declaration_complete")
+			run_test (agent t.test_complete_routine, "test_complete_routine")
+			run_test (agent t.test_complete_if_then_end, "test_complete_if_then_end")
+			run_test (agent t.test_multiline_routine_complete, "test_multiline_routine_complete")
+			-- Incomplete code tests
+			run_test (agent t.test_do_without_end_incomplete, "test_do_without_end_incomplete")
+			run_test (agent t.test_then_without_end_incomplete, "test_then_without_end_incomplete")
+			run_test (agent t.test_class_without_end_incomplete, "test_class_without_end_incomplete")
+			run_test (agent t.test_loop_without_end_incomplete, "test_loop_without_end_incomplete")
+			run_test (agent t.test_unclosed_string_incomplete, "test_unclosed_string_incomplete")
+			run_test (agent t.test_unclosed_parentheses_incomplete, "test_unclosed_parentheses_incomplete")
+			run_test (agent t.test_unclosed_brackets_incomplete, "test_unclosed_brackets_incomplete")
+			run_test (agent t.test_trailing_comma_incomplete, "test_trailing_comma_incomplete")
+			run_test (agent t.test_trailing_backslash_incomplete, "test_trailing_backslash_incomplete")
+			-- Nested blocks
+			run_test (agent t.test_nested_if_incomplete, "test_nested_if_incomplete")
+			run_test (agent t.test_nested_if_complete, "test_nested_if_complete")
+			-- Edge cases
+			run_test (agent t.test_end_in_string_not_counted, "test_end_in_string_not_counted")
+			run_test (agent t.test_keyword_in_identifier_not_counted, "test_keyword_in_identifier_not_counted")
+			run_test (agent t.test_comment_ignored, "test_comment_ignored")
+			run_test (agent t.test_deferred_class_incomplete, "test_deferred_class_incomplete")
+			run_test (agent t.test_once_without_end_incomplete, "test_once_without_end_incomplete")
+			run_test (agent t.test_inspect_without_end_incomplete, "test_inspect_without_end_incomplete")
 		end
 
 feature {NONE} -- Implementation

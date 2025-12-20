@@ -1,6 +1,17 @@
 note
-	description: "Transforms notebook cells into a single accumulated Eiffel class for compilation"
-	author: "Claude"
+	description: "[
+		Transforms notebook cells into a single accumulated Eiffel class for compilation.
+
+		Eric Bezault Design: Uses CELL_CLASSIFIER for smart cell type detection.
+
+		Cell types and their handling:
+		- Attribute: becomes class attribute
+		- Routine: becomes class feature (verbatim)
+		- Instruction: wrapped in execute_cell_N
+		- Expression: wrapped in execute_cell_N with print()
+		- Class: generates separate file (via USER_CLASS_GENERATOR)
+	]"
+	author: "Larry Rix"
 	date: "$Date$"
 	revision: "$Revision$"
 
@@ -16,7 +27,11 @@ feature {NONE} -- Initialization
 			-- Initialize generator
 		do
 			create line_mapping.make (100)
-			create shared_variables.make (10)
+			create classifier.make
+			create cell_attributes.make (10)
+			create cell_routines.make (10)
+			create executable_cells.make (10)
+			create user_classes.make (5)
 			current_line := 1
 		end
 
@@ -25,11 +40,18 @@ feature -- Access
 	line_mapping: LINE_MAPPING
 			-- Maps generated line numbers to cell locations
 
+	classifier: CELL_CLASSIFIER
+			-- Cell content classifier
+
 	last_class_name: STRING
 			-- Name of last generated class
 		attribute
 			create Result.make_empty
 		end
+
+	user_classes: ARRAYED_LIST [TUPLE [name: STRING; content: STRING]]
+			-- User-defined classes from class cells
+			-- Each entry: [class_name, full_class_text]
 
 feature -- Generation
 
@@ -38,32 +60,26 @@ feature -- Generation
 		require
 			notebook_has_cells: a_notebook.cell_count > 0
 		local
-			code_cells: ARRAYED_LIST [NOTEBOOK_CELL]; i: INTEGER
+			code_cells: ARRAYED_LIST [NOTEBOOK_CELL]
 		do
 			-- Reset state
-			create line_mapping.make (100)
-			create shared_variables.make (10)
-			current_line := 1
+			reset_state
 
+			-- Classify all cells
 			code_cells := a_notebook.code_cells
-			collect_shared_variables (code_cells)
+			classify_cells (code_cells)
 
+			-- Build the class
 			create Result.make (2000)
 			Result.append (generate_header (a_notebook))
-			Result.append (generate_result_attributes (code_cells))
-			Result.append (generate_shared_attributes)
+			Result.append (generate_cell_attributes)
+			Result.append (generate_cell_routines)
 			Result.append (generate_initialization)
-			Result.append (generate_execute_all (code_cells))
-
-			from i := 1 until i > code_cells.count loop
-				Result.append (generate_cell_feature (code_cells [i], i))
-				i := i + 1
-			end
-
+			Result.append (generate_execute_all)
+			Result.append (generate_executable_cell_features)
 			Result.append (generate_footer)
 		ensure
 			result_not_empty: not Result.is_empty
-			line_mapping_populated: line_mapping.entry_count > 0
 		end
 
 	generate_class_to_cell (a_notebook: NOTEBOOK; a_target_cell: NOTEBOOK_CELL): STRING
@@ -72,7 +88,7 @@ feature -- Generation
 			notebook_not_empty: a_notebook.cell_count > 0
 			cell_in_notebook: a_notebook.cell_by_id (a_target_cell.id) /= Void
 		local
-			code_cells: ARRAYED_LIST [NOTEBOOK_CELL]; i: INTEGER
+			code_cells: ARRAYED_LIST [NOTEBOOK_CELL]
 			target_order: INTEGER
 		do
 			target_order := a_target_cell.order
@@ -86,24 +102,19 @@ feature -- Generation
 			end
 
 			-- Reset state
-			create line_mapping.make (100)
-			create shared_variables.make (10)
-			current_line := 1
+			reset_state
 
-			collect_shared_variables (code_cells)
+			-- Classify cells up to target
+			classify_cells (code_cells)
 
+			-- Build the class
 			create Result.make (2000)
 			Result.append (generate_header (a_notebook))
-			Result.append (generate_result_attributes (code_cells))
-			Result.append (generate_shared_attributes)
+			Result.append (generate_cell_attributes)
+			Result.append (generate_cell_routines)
 			Result.append (generate_initialization)
-			Result.append (generate_execute_all (code_cells))
-
-			from i := 1 until i > code_cells.count loop
-				Result.append (generate_cell_feature (code_cells [i], i))
-				i := i + 1
-			end
-
+			Result.append (generate_execute_all)
+			Result.append (generate_executable_cell_features)
 			Result.append (generate_footer)
 		end
 
@@ -138,6 +149,72 @@ feature -- Generation
 			Result.append ("        <cluster name=%"src%" location=%".%"/>%N")
 			Result.append ("    </target>%N")
 			Result.append ("</system>%N")
+		end
+
+feature {NONE} -- Classification
+
+	classify_cells (cells: ARRAYED_LIST [NOTEBOOK_CELL])
+			-- Classify all cells and sort into appropriate lists
+		local
+			l_classification: INTEGER
+			l_index: INTEGER
+		do
+			l_index := 0
+			across cells as c loop
+				l_index := l_index + 1
+				l_classification := classifier.classify (c.code)
+
+				inspect l_classification
+				when {CELL_CLASSIFIER}.Classification_attribute then
+					cell_attributes.extend ([c, l_index])
+				when {CELL_CLASSIFIER}.Classification_routine then
+					cell_routines.extend ([c, l_index])
+				when {CELL_CLASSIFIER}.Classification_instruction then
+					executable_cells.extend ([c, l_index, False]) -- is_expression = False
+				when {CELL_CLASSIFIER}.Classification_expression then
+					executable_cells.extend ([c, l_index, True])  -- is_expression = True
+				when {CELL_CLASSIFIER}.Classification_class then
+					extract_user_class (c)
+				else
+					-- Empty or unknown: treat as expression if not empty
+					if not c.code.is_empty then
+						executable_cells.extend ([c, l_index, True])
+					end
+				end
+			end
+		end
+
+	extract_user_class (a_cell: NOTEBOOK_CELL)
+			-- Extract class name and content from a class cell
+		local
+			l_code, l_lower: STRING
+			l_class_pos, l_name_start, l_name_end: INTEGER
+			l_class_name: STRING
+		do
+			l_code := a_cell.code.twin
+			l_lower := l_code.as_lower
+
+			-- Find "class " keyword
+			l_class_pos := l_lower.substring_index ("class ", 1)
+			if l_class_pos > 0 then
+				l_name_start := l_class_pos + 6
+				-- Skip whitespace
+				from until l_name_start > l_code.count or else not l_code.item (l_name_start).is_space loop
+					l_name_start := l_name_start + 1
+				end
+				-- Find end of class name
+				l_name_end := l_name_start
+				from until l_name_end > l_code.count or else
+				           l_code.item (l_name_end).is_space or else
+				           l_code.item (l_name_end) = '%N' loop
+					l_name_end := l_name_end + 1
+				end
+
+				if l_name_end > l_name_start then
+					l_class_name := l_code.substring (l_name_start, l_name_end - 1)
+					user_classes.extend ([l_class_name, l_code])
+				end
+			end
 		end
 
 feature {NONE} -- Header/Footer Generation
@@ -176,40 +253,78 @@ feature {NONE} -- Header/Footer Generation
 		end
 
 feature {NONE} -- Attribute Generation
-	generate_result_attributes (cells: ARRAYED_LIST [NOTEBOOK_CELL]): STRING
-			-- Generate cell result attributes
-		local
-			i: INTEGER
+
+	generate_cell_attributes: STRING
+			-- Generate attributes from attribute cells
 		do
 			create Result.make (200)
-			add_line (Result, "feature -- Cell Results")
-			add_line (Result, "")
-
-			from i := 1 until i > cells.count loop
-				add_line (Result, "%Tcell_" + i.out + "_result: detachable ANY")
-				add_line (Result, "%T%T%T-- Result from cell " + i.out)
-				add_line (Result, "")
-				i := i + 1
-			end
-		end
-
-	generate_shared_attributes: STRING
-			-- Generate shared variable attributes
-		do
-			create Result.make (200)
-			if not shared_variables.is_empty then
-				add_line (Result, "feature -- Shared Variables")
+			if not cell_attributes.is_empty then
+				add_line (Result, "feature -- Attributes (from cells)")
 				add_line (Result, "")
 
-				from shared_variables.start until shared_variables.after loop
-					add_line (Result, "%T" + shared_variables.key_for_iteration + ": " + shared_variables.item_for_iteration)
+				across cell_attributes as attr loop
+					-- Add the attribute declaration verbatim (with indent)
+					add_attribute_lines (Result, attr.cell.code, attr.index)
 					add_line (Result, "")
-					shared_variables.forth
 				end
 			end
 		end
 
-feature {NONE} -- Method Generation
+	add_attribute_lines (a_buffer: STRING; a_code: STRING; a_cell_index: INTEGER)
+			-- Add attribute declaration lines to buffer with line mapping
+		local
+			l_lines: LIST [STRING]
+			l_line_idx: INTEGER
+		do
+			-- Add cell identifier comment
+			add_line (a_buffer, "%T%T-- Cell " + a_cell_index.out + ": cell_" + formatted_cell_id (a_cell_index))
+			l_lines := a_code.split ('%N')
+			from l_line_idx := 1 until l_line_idx > l_lines.count loop
+				if not l_lines [l_line_idx].is_empty then
+					line_mapping.add_mapping (current_line, "cell_" + a_cell_index.out, l_line_idx)
+					add_line (a_buffer, "%T" + l_lines [l_line_idx].twin)
+				end
+				l_line_idx := l_line_idx + 1
+			end
+		end
+
+feature {NONE} -- Routine Generation
+
+	generate_cell_routines: STRING
+			-- Generate routines from routine cells
+		do
+			create Result.make (500)
+			if not cell_routines.is_empty then
+				add_line (Result, "feature -- Routines (from cells)")
+				add_line (Result, "")
+
+				across cell_routines as routine loop
+					-- Add the routine definition verbatim (with indent)
+					add_routine_lines (Result, routine.cell.code, routine.index)
+					add_line (Result, "")
+				end
+			end
+		end
+
+	add_routine_lines (a_buffer: STRING; a_code: STRING; a_cell_index: INTEGER)
+			-- Add routine definition lines to buffer with line mapping
+		local
+			l_lines: LIST [STRING]
+			l_line_idx: INTEGER
+			l_line: STRING
+		do
+			-- Add cell identifier comment
+			add_line (a_buffer, "%T%T-- Cell " + a_cell_index.out + ": cell_" + formatted_cell_id (a_cell_index))
+			l_lines := a_code.split ('%N')
+			from l_line_idx := 1 until l_line_idx > l_lines.count loop
+				l_line := l_lines [l_line_idx].twin
+				line_mapping.add_mapping (current_line, "cell_" + a_cell_index.out, l_line_idx)
+				add_line (a_buffer, "%T" + l_line)
+				l_line_idx := l_line_idx + 1
+			end
+		end
+
+feature {NONE} -- Initialization Generation
 
 	generate_initialization: STRING
 			-- Generate initialization features
@@ -231,199 +346,80 @@ feature {NONE} -- Method Generation
 			add_line (Result, "")
 		end
 
-	generate_execute_all (cells: ARRAYED_LIST [NOTEBOOK_CELL]): STRING
+feature {NONE} -- Execution Generation
+
+	generate_execute_all: STRING
 			-- Generate execute_all feature
-		local
-			i: INTEGER
 		do
 			create Result.make (300)
 			add_line (Result, "feature -- Execution")
 			add_line (Result, "")
 			add_line (Result, "%Texecute_all")
-			add_line (Result, "%T%T%T-- Execute all cells in order")
+			add_line (Result, "%T%T%T-- Execute all instruction/expression cells in order")
 			add_line (Result, "%T%Tdo")
 
-			from i := 1 until i > cells.count loop
-				add_line (Result, "%T%T%Texecute_cell_" + i.out)
-				i := i + 1
+			across executable_cells as exec loop
+				add_line (Result, "%T%T%Texecute_cell_" + exec.index.out)
 			end
 
 			add_line (Result, "%T%Tend")
 			add_line (Result, "")
 		end
 
-	generate_cell_feature (cell: NOTEBOOK_CELL; index: INTEGER): STRING
-			-- Generate execute_cell_N feature for given cell
-		local
-			l_locals, l_body: STRING
-			l_cell_start_line: INTEGER; l_lines: LIST [STRING]; l_line_idx: INTEGER
+	generate_executable_cell_features: STRING
+			-- Generate execute_cell_N features for instruction/expression cells
 		do
 			create Result.make (500)
 
-			add_line (Result, "%Texecute_cell_" + index.out)
-			add_line (Result, "%T%T%T-- Cell " + index.out + ": " + cell.id)
-
-			-- Extract locals and body
-			l_locals := extract_locals (cell.code)
-			l_body := extract_body (cell.code)
-
-			-- Generate local section if needed
-			if not l_locals.is_empty then
-				add_line (Result, "%T%Tlocal")
-				across l_locals.split ('%N') as loc loop
-					if not loc.is_empty then
-						add_line (Result, "%T%T%T" + loc.twin)
-					end
-				end
+			across executable_cells as exec loop
+				Result.append (generate_executable_cell_feature (exec.cell, exec.index, exec.is_expression))
 			end
+		end
 
+	generate_executable_cell_feature (a_cell: NOTEBOOK_CELL; a_index: INTEGER; a_is_expression: BOOLEAN): STRING
+			-- Generate execute_cell_N feature for an instruction or expression cell
+			-- Note: Code is emitted verbatim - no automatic print() wrapping.
+			-- User controls output explicitly.
+		local
+			l_lines: LIST [STRING]
+			l_line_idx: INTEGER
+			l_line: STRING
+		do
+			create Result.make (300)
+
+			add_line (Result, "%Texecute_cell_" + a_index.out)
+			add_line (Result, "%T%T%T-- Cell " + a_index.out + ": " + a_cell.id)
 			add_line (Result, "%T%Tdo")
 
-			-- Record start of cell code for line mapping
-			l_cell_start_line := current_line
-
-			-- Add body lines with line mapping
-			l_lines := l_body.split ('%N')
+			l_lines := a_cell.code.split ('%N')
 			from l_line_idx := 1 until l_line_idx > l_lines.count loop
-				line_mapping.add_mapping (current_line, cell.id, l_line_idx)
-				add_line (Result, "%T%T%T" + l_lines [l_line_idx].twin)
+				l_line := l_lines [l_line_idx].twin
+				l_line.left_adjust
+				l_line.right_adjust
+
+				if not l_line.is_empty and then not l_line.starts_with ("--") then
+					line_mapping.add_mapping (current_line, a_cell.id, l_line_idx)
+					add_line (Result, "%T%T%T" + l_line)
+				end
 				l_line_idx := l_line_idx + 1
 			end
-
-			-- Store result
-			add_line (Result, "%T%T%T-- Store result")
-			add_line (Result, "%T%T%Tcell_" + index.out + "_result := Void -- placeholder")
 
 			add_line (Result, "%T%Tend")
 			add_line (Result, "")
 		end
 
-feature {NONE} -- Code Parsing
-
-	collect_shared_variables (cells: ARRAYED_LIST [NOTEBOOK_CELL])
-			-- Parse cells for `shared x: TYPE` declarations
-		local
-			l_lines: LIST [STRING]
-			l_line, l_name, l_type: STRING
-			l_colon_pos: INTEGER
-		do
-			shared_variables.wipe_out
-
-			across cells as c loop
-				l_lines := c.code.split ('%N')
-				across l_lines as line loop
-					l_line := line.twin
-					l_line.left_adjust
-					if l_line.starts_with ("shared ") then
-						-- Parse: shared var_name: TYPE
-						l_line := l_line.substring (8, l_line.count)
-						l_colon_pos := l_line.index_of (':', 1)
-						if l_colon_pos > 0 then
-							l_name := l_line.substring (1, l_colon_pos - 1)
-							l_name.right_adjust
-							l_type := l_line.substring (l_colon_pos + 1, l_line.count)
-							l_type.left_adjust
-							l_type.right_adjust
-							shared_variables.force (l_type, l_name)
-						end
-					end
-				end
-			end
-		end
-
-	extract_locals (code: STRING): STRING
-			-- Extract local declarations from cell code
-		local
-			l_lines: LIST [STRING]
-			l_line: STRING
-		do
-			create Result.make (100)
-
-			l_lines := code.split ('%N')
-			across l_lines as line loop
-				l_line := line.twin
-				l_line.left_adjust
-
-				-- Skip shared declarations (they become attributes)
-				if not l_line.starts_with ("shared ") then
-					-- Look for local declarations: name: TYPE
-					if is_local_declaration (l_line) then
-						if not Result.is_empty then
-							Result.append ("%N")
-						end
-						Result.append (l_line)
-					end
-				end
-			end
-		end
-
-	extract_body (code: STRING): STRING
-			-- Extract executable statements from cell code
-		local
-			l_lines: LIST [STRING]
-			l_line: STRING
-		do
-			create Result.make (code.count)
-
-			l_lines := code.split ('%N')
-			across l_lines as line loop
-				l_line := line.twin
-				l_line.left_adjust
-
-				-- Skip shared declarations
-				if not l_line.starts_with ("shared ") then
-					-- Skip local declarations
-					if not is_local_declaration (l_line) then
-						if not Result.is_empty then
-							Result.append ("%N")
-						end
-						Result.append (l_line)
-					end
-				end
-			end
-		end
-
-	is_local_declaration (line: STRING): BOOLEAN
-			-- Is this line a local variable declaration?
-			-- Pattern: identifier: TYPE (no assignment)
-		local
-			l_colon_pos, l_assign_pos: INTEGER
-			l_before_colon: STRING
-		do
-			l_colon_pos := line.index_of (':', 1)
-			l_assign_pos := line.index_of ('=', 1)
-
-			if l_colon_pos > 1 then
-				-- Has colon, check if it's a declaration vs assignment
-				if l_assign_pos = 0 or else l_assign_pos < l_colon_pos then
-					-- Check if before colon is a simple identifier
-					l_before_colon := line.substring (1, l_colon_pos - 1)
-					l_before_colon.right_adjust
-					Result := is_identifier (l_before_colon)
-				end
-			end
-		end
-
-	is_identifier (s: STRING): BOOLEAN
-			-- Is this a valid Eiffel identifier?
-		local
-			i: INTEGER
-			c: CHARACTER
-		do
-			if s.count > 0 then
-				c := s.item (1)
-				if c.is_alpha or c = '_' then
-					Result := True
-					from i := 2 until i > s.count or not Result loop
-						c := s.item (i)
-						Result := c.is_alpha or c.is_digit or c = '_'
-						i := i + 1
-					end
-				end
-			end
-		end
-
 feature {NONE} -- Helpers
+
+	reset_state
+			-- Reset internal state for new generation
+		do
+			create line_mapping.make (100)
+			cell_attributes.wipe_out
+			cell_routines.wipe_out
+			executable_cells.wipe_out
+			user_classes.wipe_out
+			current_line := 1
+		end
 
 	add_line (buffer: STRING; line: STRING)
 			-- Add line to buffer and increment line counter
@@ -454,12 +450,30 @@ feature {NONE} -- Helpers
 			end
 		end
 
+	formatted_cell_id (n: INTEGER): STRING
+			-- Format cell ID as three digits (e.g., 001, 012, 123)
+		do
+			if n < 10 then
+				Result := "00" + n.out
+			elseif n < 100 then
+				Result := "0" + n.out
+			else
+				Result := n.out
+			end
+		end
+
 feature {NONE} -- State
 
 	current_line: INTEGER
 			-- Current line number in generated output
 
-	shared_variables: HASH_TABLE [STRING, STRING]
-			-- Shared variables: name -> type
+	cell_attributes: ARRAYED_LIST [TUPLE [cell: NOTEBOOK_CELL; index: INTEGER]]
+			-- Cells classified as attributes
+
+	cell_routines: ARRAYED_LIST [TUPLE [cell: NOTEBOOK_CELL; index: INTEGER]]
+			-- Cells classified as routines
+
+	executable_cells: ARRAYED_LIST [TUPLE [cell: NOTEBOOK_CELL; index: INTEGER; is_expression: BOOLEAN]]
+			-- Cells that need execute_cell_N (instructions and expressions)
 
 end

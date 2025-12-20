@@ -290,6 +290,9 @@ feature -- Execution
 					l_cell.set_status ({NOTEBOOK_CELL}.Status_success)
 					-- Update variable tracker
 					l_vars := variable_tracker.extract_from_code (l_cell.code, a_id)
+					across l_vars as v loop
+						variable_tracker.add_variable (v)
+					end
 				else
 					l_cell.set_status ({NOTEBOOK_CELL}.Status_error)
 					if not l_exec_result.compilation_succeeded then
@@ -381,25 +384,72 @@ feature {NONE} -- Implementation
 		end
 
 	format_compilation_errors (a_result: COMPILATION_RESULT): STRING
-			-- Format compilation errors for display
+			-- Format compilation errors for display with context
 		require
 			result_not_void: a_result /= Void
+		local
+			l_error_count: INTEGER
+		do
+			create Result.make (800)
+
+			if a_result.errors.is_empty then
+				-- Show raw output if no errors were parsed
+				Result.append ("Compilation failed:%N")
+				if not a_result.stdout.is_empty then
+					Result.append (extract_error_summary (a_result.stdout))
+				end
+				if not a_result.stderr.is_empty then
+					Result.append (extract_error_summary (a_result.stderr))
+				end
+			else
+				l_error_count := a_result.errors.count
+				if l_error_count = 1 then
+					Result.append ("Compilation failed (1 error):%N%N")
+				else
+					Result.append ("Compilation failed (" + l_error_count.out + " errors):%N%N")
+				end
+
+				across a_result.errors as e loop
+					Result.append (e.formatted_message)
+					Result.append ("%N")
+				end
+			end
+		end
+
+	extract_error_summary (a_output: STRING): STRING
+			-- Extract meaningful error info from raw compiler output
+			-- Filters out noise like "System Recompiled." messages
+		local
+			l_lines: LIST [STRING]
+			l_line: STRING
 		do
 			create Result.make (500)
-			Result.append ("Compilation failed:%N")
-			across a_result.errors as e loop
-				Result.append ("  ")
-				if e.is_mapped then
-					Result.append ("Cell ")
-					Result.append (e.cell_id)
-					Result.append (", line ")
-					Result.append (e.cell_line.out)
-					Result.append (": ")
+			l_lines := a_output.split ('%N')
+
+			across l_lines as line loop
+				l_line := line.twin
+				l_line.left_adjust
+
+				-- Skip noise lines
+				if l_line.is_empty or else
+				   l_line.starts_with ("Eiffel Compilation Manager") or else
+				   l_line.starts_with ("Version ") or else
+				   l_line.starts_with ("Degree ") or else
+				   l_line.starts_with ("System Recompiled") or else
+				   l_line.starts_with ("Melting ") or else
+				   l_line.starts_with ("C compilation") or else
+				   l_line.starts_with ("Time:") then
+					-- Skip
+				else
+					-- Keep error-relevant lines
+					Result.append ("  ")
+					Result.append (l_line)
+					Result.append ("%N")
 				end
-				Result.append (e.error_code)
-				Result.append (": ")
-				Result.append (e.message)
-				Result.append ("%N")
+			end
+
+			if Result.is_empty then
+				Result := "  (No detailed error information available)%N"
 			end
 		end
 

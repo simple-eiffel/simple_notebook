@@ -48,4 +48,16 @@ feature -- Test Classes
 			create Result
 		end
 
+	classifier_tests: TEST_CLASSIFIER
+			-- Phase 2: Cell classifier tests (Eric Bezault design)
+		once
+			create Result
+		end
+
+	syntax_tests: TEST_SYNTAX_COMPLETENESS
+			-- Phase 2: Syntax completeness checker tests
+		once
+			create Result
+		end
+
 end

@@ -226,8 +226,8 @@ feature -- Test: ACCUMULATED_CLASS_GENERATOR
 			assert ("starts with ACCUMULATED", gen.last_class_name.starts_with ("ACCUMULATED_SESSION_"))
 		end
 
-	test_shared_variable_collection
-			-- Test shared variable detection
+	test_attribute_cell_collection
+			-- Test attribute cell detection (Eric Bezault design)
 		local
 			gen: ACCUMULATED_CLASS_GENERATOR
 			nb: NOTEBOOK
@@ -235,19 +235,21 @@ feature -- Test: ACCUMULATED_CLASS_GENERATOR
 			l_cell: NOTEBOOK_CELL
 		do
 			create nb.make ("test")
-			l_cell := nb.add_code_cell ("shared x: INTEGER%Nx := 42")
-			l_cell := nb.add_code_cell ("print(x)")
+			-- In Eric's design: "x: INTEGER" alone is an attribute
+			l_cell := nb.add_code_cell ("x: INTEGER")
+			l_cell := nb.add_code_cell ("x := 42")
+			l_cell := nb.add_code_cell ("print (x)")
 
 			create gen.make
 			code := gen.generate_class (nb)
 
-			-- x should be an attribute, not local
-			assert ("has shared section", code.has_substring ("feature -- Shared Variables"))
+			-- x should be an attribute (in Attributes section)
+			assert ("has attributes section", code.has_substring ("feature -- Attributes (from cells)"))
 			assert ("x is attribute", code.has_substring ("%Tx: INTEGER"))
 		end
 
-	test_local_variable_extraction
-			-- Test local variable detection
+	test_instruction_cell_generation
+			-- Test instruction cell detection
 		local
 			gen: ACCUMULATED_CLASS_GENERATOR
 			nb: NOTEBOOK
@@ -255,13 +257,15 @@ feature -- Test: ACCUMULATED_CLASS_GENERATOR
 			l_cell: NOTEBOOK_CELL
 		do
 			create nb.make ("test")
-			l_cell := nb.add_code_cell ("x: INTEGER%Nx := 42")
+			-- Assignment is an instruction
+			l_cell := nb.add_code_cell ("x := 42")
 
 			create gen.make
 			code := gen.generate_class (nb)
 
-			-- x should be local
-			assert ("has local section", code.has_substring ("local"))
+			-- Should be in execute_cell_N
+			assert ("has execute_cell", code.has_substring ("execute_cell_"))
+			assert ("has assignment", code.has_substring ("x := 42"))
 		end
 
 	test_generate_to_cell
