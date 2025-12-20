@@ -1,10 +1,26 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/simple-eiffel/claude_eiffel_op_docs/main/artwork/LOGO.png" alt="simple_ library logo" width="400">
+</p>
+
 # simple_notebook
 
-Interactive Eiffel notebook environment - execute Eiffel code cells with persistent state.
+**[Documentation](https://simple-eiffel.github.io/simple_notebook/)** | **[GitHub](https://github.com/simple-eiffel/simple_notebook)**
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Eiffel](https://img.shields.io/badge/Eiffel-25.02-blue.svg)](https://www.eiffel.org/)
+[![Design by Contract](https://img.shields.io/badge/DbC-enforced-orange.svg)]()
+
+Interactive Eiffel notebook environment - execute code cells with persistent state, streaming compiler output, and DBC trace logging.
+
+Part of the [Simple Eiffel](https://github.com/simple-eiffel) ecosystem.
+
+## Status
+
+**Alpha** - 80 tests passing, streaming compilation, auto-detect EiffelStudio
 
 ## Overview
 
-simple_notebook provides a Jupyter-like experience for Eiffel. Write code in cells, execute them, and see results. Uses natural Eiffel syntax - no special keywords.
+**simple_notebook** provides a Jupyter-like REPL experience for Eiffel. Write code in cells, execute them, and see results immediately. Uses natural Eiffel syntax - no special keywords. Features real-time streaming compiler output, automatic EiffelStudio detection, and session logging with DBC traces.
 
 ## Quick Start
 
@@ -26,6 +42,53 @@ One-liner execution:
 ```eiffel
 result := nb.run ("print (%"Hello, Eiffel!%")")
 ```
+
+## Interactive CLI
+
+Run `eiffel_notebook` for an interactive REPL session:
+
+```
+Eiffel Notebook 1.0.0-alpha.20
+Type Eiffel code to execute. Type -help for commands.
+
+e[1]> name: STRING := "World"
+...
+e[1] Output:
+
+e[2]> print ("Hello, " + name + "!")
+...
+e[2] Output:
+Hello, World!
+
+e[3]> x: INTEGER := 21
+...
+e[3] Output:
+
+e[4]> x * 2
+...
+e[4] Output:
+42
+
+e[5]> -compile verbose
+Compile mode: verbose (shows streaming compiler output)
+
+e[5]> -quit
+Goodbye!
+```
+
+### CLI Commands
+
+| Command | Description |
+|---------|-------------|
+| `-help` | Show help |
+| `-quit` | Exit |
+| `-clear` | Clear all cells |
+| `-cells` | List all cells |
+| `-vars` | Show tracked variables |
+| `-run` | Re-execute all cells |
+| `-compile verbose/silent` | Toggle compiler output streaming |
+| `-class` | Show generated Eiffel class |
+| `-debug` | Show cell classifications |
 
 ## Cell Classification
 
@@ -139,16 +202,41 @@ use_point
 
 Output: `5.0`
 
+## Installation
+
+### CLI Tool (Installer)
+
+Download and run the installer: `eiffel_notebook_setup_1.0.0-alpha.20.exe`
+
+The installer:
+- Installs the interactive CLI to `C:\Program Files\EiffelNotebook`
+- Adds to system PATH
+- Auto-detects EiffelStudio location
+
+### Library Usage
+
+1. Set the ecosystem environment variable (one-time setup for all simple_* libraries):
+```
+SIMPLE_EIFFEL=D:\prod
+```
+
+2. Add to ECF:
+```xml
+<library name="simple_notebook" location="$SIMPLE_EIFFEL/simple_notebook/simple_notebook.ecf"/>
+```
+
 ## Requirements
 
 - EiffelStudio 25.02 or later
-- Environment variable `$SIMPLE_NOTEBOOK` pointing to this directory
+- Windows (Linux/macOS support planned)
 
-## ECF Configuration
+## Dependencies
 
-```xml
-<library name="simple_notebook" location="$SIMPLE_NOTEBOOK/simple_notebook.ecf"/>
-```
+- simple_process (async process execution with streaming)
+- simple_json (notebook persistence)
+- simple_file (file operations)
+- simple_datetime (timing and timestamps)
+- simple_testing (test framework)
 
 ## API
 
@@ -180,15 +268,22 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed design documentati
 
 ## Phase Status
 
-- **Phase 1**: Core engine (COMPLETE)
-- **Phase 2**: Cell classification + Eric Bezault's design (IN PROGRESS)
-- **Phase 3**: CLI/REPL interface (planned)
-- **Phase 4**: Performance optimization (planned)
+- **Phase 1**: Core engine (COMPLETE) - 80 tests passing
+- **Phase 2**: Cell classification + Eric Bezault design (COMPLETE)
+- **Phase 3**: CLI/REPL interface (COMPLETE) - alpha.20 released
+- **Phase 4**: Enhanced UX (planned) - variable change markers, session persistence, command history
+- **Phase 5**: Web interface (planned) - browser-based notebook UI
 
 ## Acknowledgments
 
-Design feedback from Eric Bezault (Gobo) - natural Eiffel syntax approach.
+- **Eric Bezault** (Gobo Eiffel): Cell classification design using natural Eiffel syntax
+- **Javier Velilla**: Original project idea
+
+## Getting Help
+
+- **Documentation**: https://simple-eiffel.github.io/simple_notebook
+- **Issues**: https://github.com/simple-eiffel/simple_notebook/issues
 
 ## License
 
-MIT License - See LICENSE file
+MIT License

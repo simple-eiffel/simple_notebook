@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Guide - Eiffel Notebook</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <header>
+        <div class="logo-container">
+            <img src="images/logo.png" alt="simple_* logo" class="logo">
+        </div>
+        <h1>Eiffel Notebook User Guide</h1>
+        <p class="tagline">Version 1.0.0-alpha.20</p>
+    </header>
+    <nav>
+        <ul>
+            <li><a href="index.html">Home</a></li>
+            <li><a href="#getting-started">Getting Started</a></li>
+            <li><a href="#writing-code">Writing Code</a></li>
+            <li><a href="#commands">Commands</a></li>
+            <li><a href="#troubleshooting">Troubleshooting</a></li>
+        </ul>
+    </nav>
+    <main>
+        <section id="getting-started">
+            <h2>Getting Started</h2>
+            <h3>Installation</h3>
+            <ol>
+                <li>Download <code>eiffel_notebook_setup_1.0.0-alpha.20.exe</code></li>
+                <li>Run the installer with administrator privileges</li>
+                <li>The CLI is added to PATH automatically</li>
+                <li>EiffelStudio is auto-detected</li>
+            </ol>
+            <h3>First Session</h3>
+            <p>Open a command prompt and type <code>eiffel_notebook</code>:</p>
+            <pre><code>Eiffel Notebook 1.0.0-alpha.20
+Type Eiffel code to execute. Type -help for commands.
+
+e[1]&gt; name: STRING := "World"
+...
+e[1] Output:
+
+e[2]&gt; print ("Hello, " + name + "!")
+...
+e[2] Output:
+Hello, World!</code></pre>
+        </section>
+
+        <section id="writing-code">
+            <h2>Writing Code</h2>
+            <h3>Cell Types</h3>
+            <p>Cells are automatically classified:</p>
+            <table>
+                <thead><tr><th>Pattern</th><th>Type</th><th>Example</th></tr></thead>
+                <tbody>
+                    <tr><td>identifier: TYPE</td><td>Attribute</td><td><code>x: INTEGER</code></td></tr>
+                    <tr><td>name do...end</td><td>Routine</td><td><code>greet do print ("Hi") end</code></td></tr>
+                    <tr><td>Contains :=</td><td>Instruction</td><td><code>x := 42</code></td></tr>
+                    <tr><td>Everything else</td><td>Expression</td><td><code>x * 2</code></td></tr>
+                </tbody>
+            </table>
+            <h3>Multi-line Input</h3>
+            <p>After typing code, press Enter. You will see <code>...</code> for continuation.</p>
+            <p>Press Enter on an empty line to execute the cell.</p>
+            <h3>Design by Contract</h3>
+            <pre><code>e[1]&gt; safe_divide (a, b: INTEGER): INTEGER
+...       require
+...           b_not_zero: b /= 0
+...       do
+...           Result := a // b
+...       end
+...</code></pre>
+        </section>
+
+        <section id="commands">
+            <h2>Commands Reference</h2>
+            <h3>Session Commands</h3>
+            <table>
+                <thead><tr><th>Command</th><th>Alias</th><th>Description</th></tr></thead>
+                <tbody>
+                    <tr><td><code>-help</code></td><td><code>-h</code></td><td>Show help</td></tr>
+                    <tr><td><code>-quit</code></td><td><code>-q</code></td><td>Exit notebook</td></tr>
+                    <tr><td><code>-clear</code></td><td><code>-c</code></td><td>Clear all cells</td></tr>
+                </tbody>
+            </table>
+            <h3>Cell Management</h3>
+            <table>
+                <thead><tr><th>Command</th><th>Alias</th><th>Description</th></tr></thead>
+                <tbody>
+                    <tr><td><code>-cells</code></td><td></td><td>List all cells</td></tr>
+                    <tr><td><code>-show N</code></td><td><code>-s N</code></td><td>Show cell N</td></tr>
+                    <tr><td><code>-edit N</code></td><td><code>-e N</code></td><td>Edit cell N</td></tr>
+                    <tr><td><code>-delete N</code></td><td><code>-d N</code></td><td>Delete cell N</td></tr>
+                </tbody>
+            </table>
+            <h3>Execution</h3>
+            <table>
+                <thead><tr><th>Command</th><th>Description</th></tr></thead>
+                <tbody>
+                    <tr><td><code>-run</code></td><td>Re-execute all cells</td></tr>
+                    <tr><td><code>-compile verbose</code></td><td>Show streaming compiler output</td></tr>
+                    <tr><td><code>-compile silent</code></td><td>Hide compiler output</td></tr>
+                </tbody>
+            </table>
+            <h3>Inspection</h3>
+            <table>
+                <thead><tr><th>Command</th><th>Description</th></tr></thead>
+                <tbody>
+                    <tr><td><code>-vars</code></td><td>Show tracked variables</td></tr>
+                    <tr><td><code>-class</code></td><td>Show generated Eiffel class</td></tr>
+                    <tr><td><code>-debug</code></td><td>Show cell classifications</td></tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section id="troubleshooting">
+            <h2>Troubleshooting</h2>
+            <h3>Failed to start compiler</h3>
+            <p>EiffelStudio not found. Set <code>ISE_EIFFEL</code> environment variable or create config.json.</p>
+            <h3>Unknown identifier</h3>
+            <p>Declare variables before use: <code>x: INTEGER</code> then <code>x := 42</code></p>
+            <h3>Compilation hangs</h3>
+            <p>Check Task Manager for <code>notebook_session.exe</code> and kill stuck processes.</p>
+            <h3>Session Logs</h3>
+            <p>Check the log file shown at startup for debugging information.</p>
+        </section>
+    </main>
+    <footer>
+        <p><a href="index.html">Home</a> | <a href="https://github.com/simple-eiffel/simple_notebook">GitHub</a></p>
+        <p class="copyright">Built with Design by Contract. Powered by EiffelStudio.</p>
+    </footer>
+</body>
+</html>
