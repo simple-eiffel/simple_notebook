@@ -68,8 +68,9 @@ feature -- Execution
 			l_class_name := code_generator.last_class_name
 			l_ecf_code := code_generator.generate_ecf (a_notebook, l_class_name)
 
-			-- Write files to workspace
+			-- Write files to workspace (clean up old class files first)
 			ensure_workspace_exists
+			cleanup_old_class_files
 			write_generated_files (l_class_code, l_class_name, l_ecf_code)
 
 			-- Compile
@@ -229,6 +230,36 @@ feature {NONE} -- File Operations
 			create l_dir_file.make (workspace_path.name)
 			if not l_dir_file.is_directory then
 				l_ok := l_dir_file.create_directory
+			end
+		end
+
+	cleanup_old_class_files
+			-- Remove old accumulated_session_*.e files before generating new one
+		local
+			l_dir: DIRECTORY
+			l_workspace: STRING
+			l_file: RAW_FILE
+		do
+			l_workspace := workspace_path.name.to_string_8
+			create l_dir.make (l_workspace)
+			if l_dir.exists then
+				l_dir.open_read
+				from
+					l_dir.readentry
+				until
+					l_dir.lastentry = Void
+				loop
+					if attached l_dir.lastentry as l_filename then
+						if l_filename.starts_with ("accumulated_session_") and l_filename.ends_with (".e") then
+							create l_file.make_with_name (l_workspace + "/" + l_filename)
+							if l_file.exists then
+								l_file.delete
+							end
+						end
+					end
+					l_dir.readentry
+				end
+				l_dir.close
 			end
 		end
 

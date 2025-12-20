@@ -12,7 +12,7 @@ create
 
 feature -- Constants
 
-	Version: STRING = "1.0.0-alpha.14"
+	Version: STRING = "1.0.0-alpha.17"
 			-- Current version for issue tracking
 
 	Log_file_name: STRING = "eiffel_notebook_session.log"
@@ -273,10 +273,22 @@ feature {NONE} -- REPL
 		local
 			l_result: STRING
 			l_success: BOOLEAN
+			l_cell_count_before: INTEGER
 		do
+			-- DBC trace: caller logs preconditions before call
+			l_cell_count_before := notebook.cell_count
+			log_dbc_call ("CLI.execute_code", "NOTEBOOK.run",
+				"code_not_empty=" + b(not a_code.is_empty) +
+				", cell_count=" + l_cell_count_before.out)
+
 			io.put_string ("Compiling...")
 			l_result := notebook.run (a_code)
 			io.put_string ("%R             %R")
+
+			-- DBC trace: log postconditions after return
+			log_dbc_return ("NOTEBOOK.run",
+				"result_attached=" + b(l_result /= Void) +
+				", cell_added=" + b(notebook.cell_count > l_cell_count_before))
 
 			-- Determine if this was success or error
 			l_success := not l_result.has_substring ("Error") and
@@ -659,6 +671,26 @@ feature {NONE} -- Logging
 			else
 				log_event ("ERROR", "cell[" + cell_number.out + "] " + truncate (a_output, 200))
 			end
+		end
+
+	log_dbc_call (a_caller, a_supplier, a_preconditions: STRING)
+			-- Log caller-side: about to call supplier with preconditions met
+			-- Example: "NOTEBOOK_CLI.execute_code → SIMPLE_NOTEBOOK.run | pre: code_not_empty=T"
+		do
+			log_event ("→CALL", a_caller + " → " + a_supplier + " | pre: " + a_preconditions)
+		end
+
+	log_dbc_return (a_supplier, a_postconditions: STRING)
+			-- Log supplier-side: returning with postconditions met
+			-- Example: "SIMPLE_NOTEBOOK.run ← | post: result_attached=T, cell_added=T"
+		do
+			log_event ("←RET", a_supplier + " | post: " + a_postconditions)
+		end
+
+	b (a_bool: BOOLEAN): STRING
+			-- Boolean to compact string: T or F
+		do
+			if a_bool then Result := "T" else Result := "F" end
 		end
 
 	formatted_timestamp (a_dt: DATE_TIME): STRING

@@ -377,8 +377,8 @@ feature -- Serialization
 			if attached a_json.string_item ("simple_eiffel") as s then
 				create simple_eiffel.make_from_string (s)
 			end
-			if attached a_json.string_item ("workspace_dir") as s then
-				create workspace_dir.make_from_string (s)
+			if attached a_json.string_item ("workspace_dir") as s and then not s.is_empty then
+				create workspace_dir.make_from_string (expand_environment_vars (s))
 			end
 			if a_json.has_key ("timeout_seconds") then
 				timeout_seconds := a_json.integer_32_item ("timeout_seconds")
@@ -461,6 +461,38 @@ feature {NONE} -- Implementation
 				Result := h.name.to_string_8 + "/.eiffel_notebook/config.json"
 			else
 				Result := ".eiffel_notebook/config.json"
+			end
+		end
+
+	expand_environment_vars (a_path: STRING): STRING
+			-- Expand %VAR% style environment variables in path
+		local
+			l_env: EXECUTION_ENVIRONMENT
+			l_start, l_end: INTEGER
+			l_var_name, l_var_value: STRING
+		do
+			create l_env
+			Result := a_path.twin
+
+			-- Expand %USERPROFILE%, %HOME%, etc.
+			from
+				l_start := Result.index_of ('%%', 1)
+			until
+				l_start = 0
+			loop
+				l_end := Result.index_of ('%%', l_start + 1)
+				if l_end > l_start then
+					l_var_name := Result.substring (l_start + 1, l_end - 1)
+					if attached l_env.item (l_var_name) as v then
+						l_var_value := v
+						Result.replace_substring (l_var_value, l_start, l_end)
+						l_start := Result.index_of ('%%', l_start + l_var_value.count)
+					else
+						l_start := Result.index_of ('%%', l_end + 1)
+					end
+				else
+					l_start := 0
+				end
 			end
 		end
 

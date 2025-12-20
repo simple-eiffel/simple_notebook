@@ -2,7 +2,7 @@
   "eiffel_compiler": "C:\\Program Files\\Eiffel Software\\EiffelStudio 25.02 Standard\\studio\\spec\\win64\\bin\\ec.exe",
   "ise_library": "C:\\Program Files\\Eiffel Software\\EiffelStudio 25.02 Standard\\library",
   "simple_eiffel": "",
-  "workspace_dir": "",
+  "workspace_dir": "%USERPROFILE%\\.eiffel_notebook\\workspace",
   "timeout_seconds": 30,
   "autosave_interval_seconds": 60,
   "history_size": 100,
