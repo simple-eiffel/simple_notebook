@@ -121,6 +121,17 @@ feature -- Access
 			Result := engine.last_execution_time_ms
 		end
 
+	last_compiler_output: STRING
+			-- Compiler stdout/stderr from last execution (for verbose mode)
+		do
+			if attached engine.last_execution_result as r and then
+			   attached r.compilation_result as cr then
+				Result := cr.stdout + cr.stderr
+			else
+				create Result.make_empty
+			end
+		end
+
 feature -- Status
 
 	is_dirty: BOOLEAN

@@ -77,6 +77,9 @@ feature -- Access
 	last_execution_time_ms: INTEGER_64
 			-- Execution time of last run in milliseconds
 
+	last_execution_result: detachable EXECUTION_RESULT
+			-- Result of most recent cell execution (for verbose output)
+
 feature -- Status
 
 	is_dirty: BOOLEAN
@@ -284,6 +287,7 @@ feature -- Execution
 
 				-- Execute using CELL_EXECUTOR
 				l_exec_result := executor.execute_single_cell (current_notebook, l_cell)
+				last_execution_result := l_exec_result
 
 				if l_exec_result.compilation_succeeded and l_exec_result.execution_succeeded then
 					l_cell.set_output (l_exec_result.stdout)

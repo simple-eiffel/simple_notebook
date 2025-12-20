@@ -12,7 +12,7 @@ create
 
 feature -- Constants
 
-	Version: STRING = "1.0.0-alpha.17"
+	Version: STRING = "1.0.0-alpha.20"
 			-- Current version for issue tracking
 
 	Log_file_name: STRING = "eiffel_notebook_session.log"
@@ -60,12 +60,14 @@ feature {NONE} -- Initialization
 					create loaded_config.make_from_file (l_path)
 					config_source := l_config_file
 				else
-					create loaded_config.make_with_defaults
-					config_source := "(defaults)"
+					-- Auto-detect EiffelStudio paths
+					loaded_config := (create {CONFIG_DETECTOR}.make).detect_all
+					config_source := "(auto-detected)"
 				end
 			else
-				create loaded_config.make_with_defaults
-				config_source := "(defaults)"
+				-- Auto-detect EiffelStudio paths
+				loaded_config := (create {CONFIG_DETECTOR}.make).detect_all
+				config_source := "(auto-detected)"
 			end
 		ensure
 			config_loaded: loaded_config /= Void
@@ -90,6 +92,9 @@ feature -- Access
 
 	session_log: detachable PLAIN_TEXT_FILE
 			-- Session log file for troubleshooting
+
+	verbose_compile: BOOLEAN
+			-- Show compiler output during execution?
 
 feature {NONE} -- REPL
 
@@ -263,6 +268,18 @@ feature {NONE} -- REPL
 				else
 					print ("Invalid cell number%N")
 				end
+			elseif l_base_cmd.same_string ("-compile") then
+				if l_arg.same_string ("verbose") then
+					verbose_compile := True
+					print ("Compile mode: verbose (shows compiler output)%N")
+				elseif l_arg.same_string ("silent") then
+					verbose_compile := False
+					print ("Compile mode: silent%N")
+				else
+					print ("Usage: -compile verbose|silent (current: ")
+					if verbose_compile then print ("verbose") else print ("silent") end
+					print (")%N")
+				end
 			else
 				print ("Unknown command: " + l_base_cmd + ". Type -help%N")
 			end
@@ -284,6 +301,13 @@ feature {NONE} -- REPL
 			io.put_string ("Compiling...")
 			l_result := notebook.run (a_code)
 			io.put_string ("%R             %R")
+
+			-- Show compiler output if verbose mode
+			if verbose_compile then
+				print ("%N--- Compiler Output ---%N")
+				print (notebook.last_compiler_output)
+				print ("--- End Compiler Output ---%N%N")
+			end
 
 			-- DBC trace: log postconditions after return
 			log_dbc_return ("NOTEBOOK.run",
@@ -742,6 +766,7 @@ feature {NONE} -- Logging
 			print ("  -edit N, -e N  Edit cell N (or last)%N")
 			print ("%NExecution:%N")
 			print ("  -run, -r       Re-run all cells%N")
+			print ("  -compile verbose|silent  Show/hide compiler output%N")
 			print ("%NInspection (see generated code):%N")
 			print ("  -class         Show full generated Eiffel class%N")
 			print ("  -code N        Show how cell N appears in class%N")

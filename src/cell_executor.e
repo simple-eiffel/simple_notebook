@@ -129,39 +129,19 @@ feature {NONE} -- Compilation
 				l_old_exe.delete.do_nothing
 			end
 
-			-- Build compile command (use -clean to force fresh compile each time)
-			l_cmd := config.eiffel_compiler.name.to_string_8 +
+			-- Build compile command
+			l_cmd := "%"" + config.eiffel_compiler.name.to_string_8 + "%"" +
 			        " -batch" +
 			        " -clean" +
-			        " -config " + l_ecf_path.name.to_string_8 +
+			        " -config %"" + l_ecf_path.name.to_string_8 + "%"" +
 			        " -target notebook_session" +
 			        " -c_compile"
 
-			-- Run compiler
-			-- DEBUG: Uncomment to trace compilation issues
-			-- print ("DEBUG COMPILE: cmd=[" + l_cmd + "]%N")
-			-- print ("DEBUG COMPILE: dir=[" + workspace_path.name.to_string_8 + "]%N")
-
-			process.execute_in_directory (l_cmd, workspace_path.name)
+			-- Run compiler with streaming output
+			l_stdout := run_with_streaming_output (l_cmd, workspace_path.name.to_string_8)
+			create l_stderr.make_empty
 
 			l_elapsed_ms := elapsed_milliseconds (l_start_time)
-
-			-- Get output
-			if attached process.stdout as s then
-				l_stdout := s.to_string_8
-			else
-				create l_stdout.make_empty
-			end
-			if attached process.stderr as s then
-				l_stderr := s.to_string_8
-			else
-				create l_stderr.make_empty
-			end
-
-			-- DEBUG: Uncomment to trace compilation issues
-			-- print ("DEBUG COMPILE: exit_code=" + process.exit_code.out + "%N")
-			-- print ("DEBUG COMPILE: stdout_len=" + l_stdout.count.out + "%N")
-			-- print ("DEBUG COMPILE: stderr_len=" + l_stderr.count.out + "%N")
 
 			-- Check if exe was created (ec.exe returns 0 even on errors!)
 			l_exe_path := find_executable (a_class_name)
@@ -169,7 +149,9 @@ feature {NONE} -- Compilation
 
 			if l_old_exe.exists then
 				-- Compilation succeeded - exe was created
-				create Result.make_success (l_exe_path, l_elapsed_ms)
+				create Result.make (True, l_stdout, l_stderr)
+				Result.set_executable_path (l_exe_path)
+				Result.set_compilation_time_ms (l_elapsed_ms)
 			else
 				-- Compilation failed - parse errors from output
 				-- LOG to file for debugging
@@ -312,6 +294,50 @@ feature {NONE} -- Paths
 		end
 
 feature {NONE} -- Helpers
+
+	run_with_streaming_output (a_cmd: STRING; a_dir: STRING): STRING
+			-- Run command and stream output to console as it arrives
+		local
+			l_async: SIMPLE_ASYNC_PROCESS
+			l_env: EXECUTION_ENVIRONMENT
+		do
+			create Result.make (4096)
+			create l_async.make
+			create l_env
+
+			-- Start the process
+			l_async.start_in_directory (a_cmd, a_dir)
+
+			if l_async.was_started_successfully then
+				-- Poll for output while running
+				from
+				until
+					not l_async.is_running
+				loop
+					if attached l_async.read_available_output as chunk then
+						-- Stream to console immediately
+						print (chunk)
+						Result.append (chunk.to_string_8)
+					end
+					-- Small sleep to avoid busy-waiting (100ms)
+					l_env.sleep (100_000_000)
+				end
+
+				-- Read any remaining output after process ends
+				if attached l_async.read_available_output as final_chunk then
+					print (final_chunk)
+					Result.append (final_chunk.to_string_8)
+				end
+
+				l_async.close
+			else
+				if attached l_async.last_error as err then
+					Result := "Failed to start: " + err.to_string_8
+				else
+					Result := "Failed to start compiler"
+				end
+			end
+		end
 
 	elapsed_milliseconds (a_start: DATE_TIME): INTEGER
 			-- Milliseconds elapsed since start time
