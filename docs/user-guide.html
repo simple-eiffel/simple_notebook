@@ -18,6 +18,7 @@
         <ul>
             <li><a href="index.html">Home</a></li>
             <li><a href="#getting-started">Getting Started</a></li>
+            <li><a href="#linux-setup">Linux/WSL2</a></li>
             <li><a href="#writing-code">Writing Code</a></li>
             <li><a href="#commands">Commands</a></li>
             <li><a href="#troubleshooting">Troubleshooting</a></li>
@@ -25,7 +26,7 @@
     </nav>
     <main>
         <section id="getting-started">
-            <h2>Getting Started</h2>
+            <h2>Getting Started (Windows)</h2>
             <h3>Installation</h3>
             <ol>
                 <li>Download <code>eiffel_notebook_setup_1.0.0-alpha.20.exe</code></li>
@@ -46,6 +47,44 @@ e[2]&gt; print ("Hello, " + name + "!")
 ...
 e[2] Output:
 Hello, World!</code></pre>
+        </section>
+
+        <section id="linux-setup">
+            <h2>Linux and WSL2 Setup</h2>
+            <h3>Prerequisites</h3>
+            <ol>
+                <li>Install build tools:
+                    <pre><code>sudo apt update
+sudo apt install build-essential gcc make</code></pre>
+                </li>
+                <li>Install EiffelStudio from <a href="https://www.eiffel.com/eiffelstudio/download/">eiffel.com</a></li>
+            </ol>
+
+            <h3>Required Environment Variables</h3>
+            <p>Add these to <code>~/.bashrc</code> for persistence:</p>
+            <pre><code># EiffelStudio configuration (REQUIRED)
+export ISE_EIFFEL=$HOME/Eiffel_25.02
+export ISE_PLATFORM=linux-x86-64
+export ISE_LIBRARY=$ISE_EIFFEL
+export PATH=$ISE_EIFFEL/studio/spec/$ISE_PLATFORM/bin:$PATH
+
+# Simple Eiffel ecosystem
+export SIMPLE_EIFFEL=$HOME/simple_eiffel</code></pre>
+
+            <div class="warning">
+                <strong>Important:</strong> <code>ISE_LIBRARY</code> must be set or compilation will fail with 
+                <code>eif_langinfo.h: No such file or directory</code>.
+            </div>
+
+            <h3>Running the Notebook</h3>
+            <pre><code># Set environment (or add to ~/.bashrc)
+source ~/.bashrc
+
+# Run notebook
+~/simple_eiffel/simple_notebook/EIFGENs/notebook_cli/W_code/simple_notebook</code></pre>
+
+            <h3>WSL2 Notes</h3>
+            <p>WSL2 works identically to native Linux. The notebook has been tested on Ubuntu 22.04 under WSL2.</p>
         </section>
 
         <section id="writing-code">
@@ -119,10 +158,16 @@ Hello, World!</code></pre>
             <h2>Troubleshooting</h2>
             <h3>Failed to start compiler</h3>
             <p>EiffelStudio not found. Set <code>ISE_EIFFEL</code> environment variable or create config.json.</p>
+            
+            <h3>eif_langinfo.h: No such file or directory (Linux)</h3>
+            <p>Set <code>ISE_LIBRARY=$ISE_EIFFEL</code> in your environment.</p>
+
             <h3>Unknown identifier</h3>
             <p>Declare variables before use: <code>x: INTEGER</code> then <code>x := 42</code></p>
+            
             <h3>Compilation hangs</h3>
-            <p>Check Task Manager for <code>notebook_session.exe</code> and kill stuck processes.</p>
+            <p>Check Task Manager (Windows) or <code>ps aux | grep notebook</code> (Linux) for stuck processes.</p>
+            
             <h3>Session Logs</h3>
             <p>Check the log file shown at startup for debugging information.</p>
         </section>

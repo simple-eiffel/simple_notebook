@@ -213,27 +213,42 @@ The installer:
 - Adds to system PATH
 - Auto-detects EiffelStudio location
 
-### Linux (Ubuntu/Debian)
+### Linux (Ubuntu/Debian) and WSL2
 
-**Prerequisites:** Install EiffelStudio first:
+**Prerequisites:**
 
+1. Install build tools:
 ```bash
-# Option 1: Ubuntu PPA (recommended)
-sudo add-apt-repository ppa:eiffelstudio-team/ppa
 sudo apt update
-sudo apt install eiffelstudio
-
-# Option 2: Manual install
-# Download from https://www.eiffel.com/eiffelstudio/download/
-# Extract to /opt/eiffelstudio
-# Set ISE_EIFFEL=/opt/eiffelstudio
-# Set ISE_PLATFORM=linux-x86-64
+sudo apt install build-essential gcc make
 ```
+
+2. Install EiffelStudio:
+```bash
+# Download from https://www.eiffel.com/eiffelstudio/download/
+# Extract to ~/Eiffel_25.02 (or your preferred location)
+tar -xzf EiffelStudio-25.02-linux-x86-64.tar.gz -C ~/
+```
+
+3. **Set environment variables** (add to `~/.bashrc` for persistence):
+```bash
+# EiffelStudio configuration (REQUIRED)
+export ISE_EIFFEL=$HOME/Eiffel_25.02
+export ISE_PLATFORM=linux-x86-64
+export ISE_LIBRARY=$ISE_EIFFEL
+export PATH=$ISE_EIFFEL/studio/spec/$ISE_PLATFORM/bin:$PATH
+
+# Simple Eiffel ecosystem
+export SIMPLE_EIFFEL=$HOME/simple_eiffel
+```
+
+> **Important:** `ISE_LIBRARY` must be set or compilation will fail with `eif_langinfo.h: No such file or directory`.
 
 **Build from source:**
 
 ```bash
 # Clone the Simple Eiffel ecosystem
+mkdir -p ~/simple_eiffel && cd ~/simple_eiffel
 git clone https://github.com/simple-eiffel/simple_notebook
 git clone https://github.com/simple-eiffel/simple_process
 git clone https://github.com/simple-eiffel/simple_json
@@ -241,21 +256,36 @@ git clone https://github.com/simple-eiffel/simple_file
 git clone https://github.com/simple-eiffel/simple_datetime
 git clone https://github.com/simple-eiffel/simple_testing
 
-# Set environment
-export SIMPLE_EIFFEL=$(pwd)
-
-# Compile C code for simple_process
+# Compile C code for simple_process (cross-platform support)
 cd simple_process/Clib
 gcc -c -fPIC -I. simple_process.c -o simple_process.o
 cd ../..
 
 # Build Eiffel Notebook
 cd simple_notebook
-./build.sh
+ec -batch -config simple_notebook.ecf -target notebook_cli -c_compile
 
 # Run
-./EIFGENs/notebook_cli/W_code/eiffel_notebook
+./EIFGENs/notebook_cli/W_code/simple_notebook
 ```
+
+### WSL2 (Windows Subsystem for Linux)
+
+WSL2 works identically to native Linux. Follow the Linux instructions above inside your WSL2 Ubuntu instance.
+
+**Quick setup for WSL2:**
+```bash
+# In WSL2 Ubuntu terminal
+export ISE_EIFFEL=$HOME/Eiffel_25.02
+export ISE_PLATFORM=linux-x86-64
+export ISE_LIBRARY=$ISE_EIFFEL
+export PATH=$ISE_EIFFEL/studio/spec/$ISE_PLATFORM/bin:$PATH
+export SIMPLE_EIFFEL=$HOME/simple_eiffel
+
+# Run notebook
+~/simple_eiffel/simple_notebook/EIFGENs/notebook_cli/W_code/simple_notebook
+```
+
 
 ### Library Usage
 
