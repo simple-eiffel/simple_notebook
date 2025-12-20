@@ -204,7 +204,7 @@ Output: `5.0`
 
 ## Installation
 
-### CLI Tool (Installer)
+### Windows
 
 Download and run the installer: `eiffel_notebook_setup_1.0.0-alpha.20.exe`
 
@@ -213,11 +213,59 @@ The installer:
 - Adds to system PATH
 - Auto-detects EiffelStudio location
 
+### Linux (Ubuntu/Debian)
+
+**Prerequisites:** Install EiffelStudio first:
+
+```bash
+# Option 1: Ubuntu PPA (recommended)
+sudo add-apt-repository ppa:eiffelstudio-team/ppa
+sudo apt update
+sudo apt install eiffelstudio
+
+# Option 2: Manual install
+# Download from https://www.eiffel.com/eiffelstudio/download/
+# Extract to /opt/eiffelstudio
+# Set ISE_EIFFEL=/opt/eiffelstudio
+# Set ISE_PLATFORM=linux-x86-64
+```
+
+**Build from source:**
+
+```bash
+# Clone the Simple Eiffel ecosystem
+git clone https://github.com/simple-eiffel/simple_notebook
+git clone https://github.com/simple-eiffel/simple_process
+git clone https://github.com/simple-eiffel/simple_json
+git clone https://github.com/simple-eiffel/simple_file
+git clone https://github.com/simple-eiffel/simple_datetime
+git clone https://github.com/simple-eiffel/simple_testing
+
+# Set environment
+export SIMPLE_EIFFEL=$(pwd)
+
+# Compile C code for simple_process
+cd simple_process/Clib
+gcc -c -fPIC -I. simple_process.c -o simple_process.o
+cd ../..
+
+# Build Eiffel Notebook
+cd simple_notebook
+./build.sh
+
+# Run
+./EIFGENs/notebook_cli/W_code/eiffel_notebook
+```
+
 ### Library Usage
 
 1. Set the ecosystem environment variable (one-time setup for all simple_* libraries):
-```
-SIMPLE_EIFFEL=D:\prod
+```bash
+# Windows
+set SIMPLE_EIFFEL=D:\prod
+
+# Linux/macOS
+export SIMPLE_EIFFEL=/path/to/simple-eiffel
 ```
 
 2. Add to ECF:
@@ -228,7 +276,7 @@ SIMPLE_EIFFEL=D:\prod
 ## Requirements
 
 - EiffelStudio 25.02 or later
-- Windows (Linux/macOS support planned)
+- Windows, Linux (Ubuntu 20.04+), or macOS
 
 ## Dependencies
 

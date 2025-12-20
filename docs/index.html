@@ -36,8 +36,17 @@
         </section>
         <section id="quick-start">
             <h2>Quick Start</h2>
-            <h3>Installation</h3>
-            <p>Download: <code>eiffel_notebook_setup_1.0.0-alpha.20.exe</code></p>
+            <h3>Windows Installation</h3>
+            <p>Download and run: <code>eiffel_notebook_setup_1.0.0-alpha.20.exe</code></p>
+            <h3>Linux Installation (Ubuntu/Debian)</h3>
+            <p>Install EiffelStudio first, then build from source:</p>
+<pre><code># Install EiffelStudio
+sudo add-apt-repository ppa:eiffelstudio-team/ppa
+sudo apt update && sudo apt install eiffelstudio
+
+# Clone and build
+git clone https://github.com/simple-eiffel/simple_notebook
+cd simple_notebook && ./build.sh</code></pre>
             <h3>Interactive Session</h3>
             <pre><code>e[1]&gt; name: STRING := "World"
 e[2]&gt; print ("Hello, " + name + "!")
@@ -49,12 +58,12 @@ e[4]&gt; x * 2
         <section id="features">
             <h2>Key Features</h2>
             <div class="feature-grid">
-                <div class="feature-card"><h4>Natural Eiffel Syntax</h4><p>Write standard Eiffel code.</p></div>
+                <div class="feature-card"><h4>Cross-Platform</h4><p>Windows and Linux (Ubuntu/Debian).</p></div>
                 <div class="feature-card"><h4>Streaming Compilation</h4><p>Real-time compiler output.</p></div>
                 <div class="feature-card"><h4>Variable Persistence</h4><p>Attributes persist across cells.</p></div>
                 <div class="feature-card"><h4>DBC Contracts</h4><p>Full require/ensure support.</p></div>
                 <div class="feature-card"><h4>Auto-Detection</h4><p>Finds EiffelStudio automatically.</p></div>
-                <div class="feature-card"><h4>Session Logging</h4><p>DBC trace logs for debugging.</p></div>
+                <div class="feature-card"><h4>Natural Eiffel Syntax</h4><p>Write standard Eiffel code.</p></div>
             </div>
         </section>
         <section id="cli">
