@@ -1,0 +1,19 @@
+{
+  "eiffel_compiler": "C:\\Program Files\\Eiffel Software\\EiffelStudio 25.02 Standard\\studio\\spec\\win64\\bin\\ec.exe",
+  "ise_library": "C:\\Program Files\\Eiffel Software\\EiffelStudio 25.02 Standard\\library",
+  "simple_eiffel": "",
+  "workspace_dir": "",
+  "timeout_seconds": 30,
+  "autosave_interval_seconds": 60,
+  "history_size": 100,
+  "repl": {
+    "prompt_style": "numbered",
+    "show_timing": true,
+    "show_variable_changes": true,
+    "quiet_mode": false
+  },
+  "web": {
+    "port": 8080,
+    "host": "localhost"
+  }
+}

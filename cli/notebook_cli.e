@@ -12,7 +12,7 @@ create
 
 feature -- Constants
 
-	Version: STRING = "1.0.0-alpha.13"
+	Version: STRING = "1.0.0-alpha.14"
 			-- Current version for issue tracking
 
 	Log_file_name: STRING = "eiffel_notebook_session.log"
@@ -23,18 +23,59 @@ feature {NONE} -- Initialization
 	make
 			-- Launch interactive notebook session
 		local
-			l_ec_path: PATH
+			l_config_path: PATH
 		do
-			create notebook.make
+			load_config
+			create notebook.make_with_config (loaded_config)
 			init_session_log
-			-- Hardcode compiler path for testing (TODO: fix CONFIG_DETECTOR)
-			create l_ec_path.make_from_string ("C:\Program Files\Eiffel Software\EiffelStudio 25.02 Standard\studio\spec\win64\bin\ec.exe")
-			notebook.config.set_eiffel_compiler (l_ec_path)
 			running := True
 			log_event ("Session started", "version=" + Version)
 			print_welcome
 			repl_loop
 		end
+
+	load_config
+			-- Load configuration from file next to exe, or use defaults
+		local
+			l_env: EXECUTION_ENVIRONMENT
+			l_exe_dir: detachable STRING
+			l_config_file: STRING
+			l_file: PLAIN_TEXT_FILE
+			l_path: PATH
+		do
+			create l_env
+			-- Try to find config.json next to the executable
+			if attached l_env.command_line.argument (0) as exe_path then
+				l_exe_dir := exe_path.substring (1, exe_path.last_index_of ('\', exe_path.count))
+				if l_exe_dir.is_empty then
+					l_exe_dir := exe_path.substring (1, exe_path.last_index_of ('/', exe_path.count))
+				end
+			end
+
+			if l_exe_dir /= Void and then not l_exe_dir.is_empty then
+				l_config_file := l_exe_dir + "config.json"
+				create l_file.make_with_name (l_config_file)
+				if l_file.exists then
+					create l_path.make_from_string (l_config_file)
+					create loaded_config.make_from_file (l_path)
+					config_source := l_config_file
+				else
+					create loaded_config.make_with_defaults
+					config_source := "(defaults)"
+				end
+			else
+				create loaded_config.make_with_defaults
+				config_source := "(defaults)"
+			end
+		ensure
+			config_loaded: loaded_config /= Void
+		end
+
+	loaded_config: NOTEBOOK_CONFIG
+			-- Configuration loaded at startup
+
+	config_source: STRING
+			-- Where config was loaded from
 
 feature -- Access
 
@@ -530,7 +571,8 @@ feature {NONE} -- Output
 			print ("%N")
 			print ("Eiffel Notebook " + Version + "%N")
 			print ("Type Eiffel code to execute. Type -help for commands.%N")
-			print ("Session log: " + log_path + "%N")
+			print ("Config: " + config_source + "%N")
+			print ("Log: " + log_path + "%N")
 			print ("%N")
 		end
 

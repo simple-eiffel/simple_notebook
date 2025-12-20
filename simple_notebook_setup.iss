@@ -1,18 +1,19 @@
 [Setup]
 AppName=Eiffel Notebook
-AppVersion=1.0.0-alpha.13
+AppVersion=1.0.0-alpha.14
 AppPublisher=Simple Eiffel
 AppPublisherURL=https://github.com/simple-eiffel/simple_notebook
 DefaultDirName={autopf}\EiffelNotebook
 DefaultGroupName=Eiffel Notebook
 OutputDir=installer
-OutputBaseFilename=eiffel_notebook_setup_1.0.0-alpha.13
+OutputBaseFilename=eiffel_notebook_setup_1.0.0-alpha.14
 Compression=lzma
 SolidCompression=yes
 ArchitecturesInstallIn64BitMode=x64
 
 [Files]
 Source: "EIFGENs\notebook_cli\F_code\simple_notebook.exe"; DestDir: "{app}"; DestName: "eiffel_notebook.exe"; Flags: ignoreversion
+Source: "installer\config.json"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\Eiffel Notebook"; Filename: "{app}\eiffel_notebook.exe"
