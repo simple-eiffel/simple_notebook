@@ -12,7 +12,7 @@ create
 
 feature -- Constants
 
-	Version: STRING = "1.0.0-alpha.23"
+	Version: STRING = "1.0.0-alpha.24"
 			-- Current version for issue tracking
 
 	Log_file_name: STRING = "eiffel_notebook_session.log"
@@ -314,9 +314,11 @@ feature {NONE} -- REPL
 			elseif l_base_cmd.same_string ("-compile") then
 				if l_arg.same_string ("verbose") then
 					verbose_compile := True
+					notebook.engine.executor.set_verbose_compile (True)
 					print ("Compile mode: verbose (shows compiler output)%N")
 				elseif l_arg.same_string ("silent") then
 					verbose_compile := False
+					notebook.engine.executor.set_verbose_compile (False)
 					print ("Compile mode: silent%N")
 				else
 					print ("Usage: -compile verbose|silent (current: ")

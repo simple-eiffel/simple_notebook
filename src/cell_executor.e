@@ -21,8 +21,10 @@ feature {NONE} -- Initialization
 			create code_generator.make
 			create error_parser.make
 			create process.make
+			verbose_compile := True  -- Default to verbose for backwards compatibility
 		ensure
 			config_set: config = a_config
+			verbose_by_default: verbose_compile
 		end
 
 feature -- Access
@@ -32,6 +34,20 @@ feature -- Access
 
 	code_generator: ACCUMULATED_CLASS_GENERATOR
 			-- Class generator
+
+	verbose_compile: BOOLEAN
+			-- Should compiler output be streamed to console?
+			-- Default is True for backwards compatibility
+
+feature -- Settings
+
+	set_verbose_compile (a_verbose: BOOLEAN)
+			-- Set whether to stream compiler output
+		do
+			verbose_compile := a_verbose
+		ensure
+			verbose_set: verbose_compile = a_verbose
+		end
 
 	line_mapping: LINE_MAPPING
 			-- Last line mapping (for error mapping)
@@ -128,11 +144,13 @@ feature {NONE} -- Compilation
 			check_frozen_status
 			l_was_frozen := is_frozen
 
-			-- Show mode indicator
-			if is_frozen then
-				print ("(melt) ")
-			else
-				print ("(freeze) ")
+			-- Show mode indicator (only in verbose mode)
+			if verbose_compile then
+				if is_frozen then
+					print ("(melt) ")
+				else
+					print ("(freeze) ")
+				end
 			end
 
 			-- Only delete old exe if we're doing a fresh freeze
@@ -333,8 +351,10 @@ feature {NONE} -- Helpers
 					not l_async.is_running
 				loop
 					if attached l_async.read_available_output as chunk then
-						-- Stream to console immediately
-						print (chunk)
+						-- Stream to console only if verbose
+						if verbose_compile then
+							print (chunk)
+						end
 						Result.append (chunk.to_string_8)
 					end
 					-- Small sleep to avoid busy-waiting (100ms)
@@ -343,7 +363,9 @@ feature {NONE} -- Helpers
 
 				-- Read any remaining output after process ends
 				if attached l_async.read_available_output as final_chunk then
-					print (final_chunk)
+					if verbose_compile then
+						print (final_chunk)
+					end
 					Result.append (final_chunk.to_string_8)
 				end
 
