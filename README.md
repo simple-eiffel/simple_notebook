@@ -154,6 +154,21 @@ end
 Class CAR updated in cell 1.
 ```
 
+
+### Opening in EiffelStudio
+
+After running cells, you can open the generated workspace directly in EiffelStudio:
+
+1. Run some cells in the notebook to create a working session
+2. Navigate to the workspace directory shown at startup (typically `~/.eiffel_notebook/workspace/`)
+3. Open the `.ecf` file in EiffelStudio
+4. Browse, debug, or modify your code with full IDE features
+
+This is great for:
+- Debugging complex code with breakpoints
+- Exploring generated class structure
+- Experimenting with modifications before updating cells
+
 ### CLI Commands
 
 | Command | Description |
