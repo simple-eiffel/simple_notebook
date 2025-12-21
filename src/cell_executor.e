@@ -21,6 +21,7 @@ feature {NONE} -- Initialization
 			create code_generator.make
 			create error_parser.make
 			create process.make
+			create last_user_class_files.make (5)
 			verbose_compile := True  -- Default to verbose for backwards compatibility
 		ensure
 			config_set: config = a_config
@@ -38,6 +39,10 @@ feature -- Access
 	verbose_compile: BOOLEAN
 			-- Should compiler output be streamed to console?
 			-- Default is True for backwards compatibility
+
+	last_user_class_files: ARRAYED_LIST [STRING]
+			-- Paths of user class files from last compilation
+			-- Used for cleanup on next run
 
 feature -- Settings
 
@@ -76,6 +81,7 @@ feature -- Execution
 			l_class_name: STRING
 			l_compile_result: COMPILATION_RESULT
 			l_start_time: DATE_TIME
+			l_has_class_cells: BOOLEAN
 		do
 			create l_start_time.make_now
 
@@ -83,6 +89,12 @@ feature -- Execution
 			l_class_code := code_generator.generate_class_to_cell (a_notebook, a_target_cell)
 			l_class_name := code_generator.last_class_name
 			l_ecf_code := code_generator.generate_ecf (a_notebook, l_class_name)
+
+			-- Check if class structure changed (requires re-freeze)
+			l_has_class_cells := not code_generator.user_classes.is_empty
+			if l_has_class_cells and then has_class_structure_changed then
+				reset_frozen_status
+			end
 
 			-- Write files to workspace (clean up old class files first)
 			ensure_workspace_exists
@@ -136,6 +148,8 @@ feature {NONE} -- Compilation
 			l_stdout, l_stderr: STRING
 			l_old_exe: SIMPLE_FILE
 			l_was_frozen: BOOLEAN
+			l_parsed_errors: ARRAYED_LIST [COMPILER_ERROR]
+			l_has_errors: BOOLEAN
 		do
 			create l_start_time.make_now
 			l_ecf_path := workspace_ecf_path
@@ -172,11 +186,27 @@ feature {NONE} -- Compilation
 
 			l_elapsed_ms := elapsed_milliseconds (l_start_time)
 
-			-- Check if exe exists (ec.exe returns 0 even on errors!)
+			-- Parse errors from compiler output FIRST
+			-- This is essential because:
+			-- 1) ec.exe returns 0 even on errors
+			-- 2) With melt mode, the exe always exists (from previous freeze)
+			l_parsed_errors := error_parser.parse_errors (l_stdout + "%N" + l_stderr)
+			l_has_errors := not l_parsed_errors.is_empty
+
+			-- In silent mode, still report errors if any were found
+			if not verbose_compile and l_has_errors then
+				print ("%NCompilation errors:%N")
+				across l_parsed_errors as e loop
+					print ("  " + e.error_code + ": " + e.message + "%N")
+				end
+			end
+
+			-- Check if exe exists
 			l_exe_path := find_executable (a_class_name)
 			create l_old_exe.make (l_exe_path.name)
 
-			if l_old_exe.exists then
+			-- Compilation succeeds only if: exe exists AND no errors parsed
+			if l_old_exe.exists and then not l_has_errors then
 				-- Compilation succeeded
 				create Result.make (True, l_stdout, l_stderr)
 				Result.set_executable_path (l_exe_path)
@@ -186,11 +216,11 @@ feature {NONE} -- Compilation
 					is_frozen := True
 				end
 			else
-				-- Compilation failed - parse errors from output
+				-- Compilation failed
 				log_compile_failure (l_cmd, l_stdout, l_stderr)
 				create Result.make (False, l_stdout, l_stderr)
 				Result.set_compilation_time_ms (l_elapsed_ms)
-				Result.errors.append (error_parser.parse_errors (l_stdout + "%N" + l_stderr))
+				Result.errors.append (l_parsed_errors)
 				-- If melt failed, try resetting to force fresh freeze next time
 				if l_was_frozen then
 					is_frozen := False
@@ -252,13 +282,16 @@ feature {NONE} -- File Operations
 		end
 
 	cleanup_old_class_files
-			-- Remove old accumulated_session_*.e files before generating new one
+			-- Remove old accumulated_session_*.e and user class files
 		local
 			l_dir: DIRECTORY
 			l_workspace: STRING
 			l_file: RAW_FILE
+			l_user_file: SIMPLE_FILE
 		do
 			l_workspace := workspace_path.name.to_string_8
+
+			-- Remove accumulated_session_*.e files
 			create l_dir.make (l_workspace)
 			if l_dir.exists then
 				l_dir.open_read
@@ -279,23 +312,41 @@ feature {NONE} -- File Operations
 				end
 				l_dir.close
 			end
+
+			-- Remove user class files from last run
+			across last_user_class_files as f loop
+				create l_user_file.make (f)
+				if l_user_file.exists then
+					l_user_file.delete.do_nothing
+				end
+			end
+			last_user_class_files.wipe_out
 		end
 
 	write_generated_files (a_class: STRING; a_class_name: STRING; a_ecf: STRING)
-			-- Write generated class and ECF to workspace
+			-- Write generated class, user classes, and ECF to workspace
 		local
-			l_class_file, l_ecf_file: SIMPLE_FILE
-			l_class_path, l_ecf_path: STRING
+			l_class_file, l_ecf_file, l_user_file: SIMPLE_FILE
+			l_class_path, l_ecf_path, l_user_path: STRING
 			l_ok: BOOLEAN
 		do
+			-- Write main accumulated session class
 			l_class_path := workspace_path.name.to_string_8 + "/" + a_class_name.as_lower + ".e"
-			l_ecf_path := workspace_ecf_path.name.to_string_8
-
 			create l_class_file.make (l_class_path)
 			l_ok := l_class_file.set_content (a_class)
 
+			-- Write ECF
+			l_ecf_path := workspace_ecf_path.name.to_string_8
 			create l_ecf_file.make (l_ecf_path)
 			l_ok := l_ecf_file.set_content (a_ecf)
+
+			-- Write user-defined class files
+			across code_generator.user_classes as uc loop
+				l_user_path := workspace_path.name.to_string_8 + "/" + uc.name.as_lower + ".e"
+				create l_user_file.make (l_user_path)
+				l_ok := l_user_file.set_content (uc.content)
+				last_user_class_files.extend (l_user_path)
+			end
 		end
 
 	find_executable (a_class_name: STRING): PATH
@@ -403,6 +454,10 @@ feature {NONE} -- Implementation
 			-- Has initial freeze been done?
 			-- After freeze, we can use fast melt mode (no C compilation)
 
+	last_user_class_count: INTEGER
+			-- Number of user classes from last compilation
+			-- Used to detect class structure changes
+
 feature {NONE} -- Melt Mode
 
 	check_frozen_status
@@ -424,6 +479,14 @@ feature {NONE} -- Melt Mode
 			is_frozen := False
 		ensure
 			not_frozen: not is_frozen
+		end
+
+	has_class_structure_changed: BOOLEAN
+			-- Have user class cells changed since last freeze?
+			-- If count differs, structure has changed
+		do
+			Result := code_generator.user_classes.count /= last_user_class_count
+			last_user_class_count := code_generator.user_classes.count
 		end
 
 	build_compile_command (a_ecf_path: PATH): STRING
@@ -482,3 +545,5 @@ invariant
 	code_generator_not_void: code_generator /= Void
 
 end
+
+

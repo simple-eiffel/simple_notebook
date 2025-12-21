@@ -12,7 +12,7 @@ create
 
 feature -- Constants
 
-	Version: STRING = "1.0.0-alpha.24"
+	Version: STRING = "1.0.0-alpha.34"
 			-- Current version for issue tracking
 
 	Log_file_name: STRING = "eiffel_notebook_session.log"
@@ -31,6 +31,8 @@ feature {NONE} -- Initialization
 		do
 			load_config
 			create notebook.make_with_config (loaded_config)
+			-- Start in silent compile mode (user can switch with -compile verbose)
+			notebook.engine.executor.set_verbose_compile (False)
 			init_storage
 			init_history
 			current_notebook_name := Default_notebook_name
@@ -115,6 +117,18 @@ feature -- Access
 	history: COMMAND_HISTORY
 			-- Command history manager
 
+	focused_class_name: detachable STRING
+			-- Name of class currently being edited (Void = session mode)
+
+	focused_class_inherit: detachable STRING
+			-- Inherit clause for focused class (e.g., "inherit CAR BOAT")
+
+	focused_class_content: detachable ARRAYED_LIST [STRING]
+			-- Lines of the class being edited (between class header and end)
+
+	editing_class_cell: INTEGER
+			-- Cell number being edited (0 = creating new class, >0 = replacing cell)
+
 feature {NONE} -- REPL
 
 	repl_loop
@@ -140,13 +154,25 @@ feature {NONE} -- REPL
 			-- Display the input prompt with dirty indicator
 		local
 			l_dirty: STRING
+			l_line_count: INTEGER
 		do
 			if notebook.is_dirty then
 				l_dirty := "*"
 			else
 				l_dirty := ""
 			end
-			io.put_string ("e[" + cell_number.out + "]" + l_dirty + "> ")
+			if attached focused_class_name as fcn then
+				-- Focused on a class: show class name and line count
+				if attached focused_class_content as fcc then
+					l_line_count := fcc.count + 2  -- +2 for class header and end
+				else
+					l_line_count := 2
+				end
+				io.put_string ("e[" + fcn + " " + l_line_count.out + "]" + l_dirty + "> ")
+			else
+				-- Normal session mode
+				io.put_string ("e[" + cell_number.out + "]" + l_dirty + "> ")
+			end
 		end
 
 	read_input: STRING
@@ -155,6 +181,7 @@ feature {NONE} -- REPL
 			-- Empty line (just Enter) triggers submission
 		local
 			l_line: STRING
+			l_class_name: STRING
 			l_done: BOOLEAN
 		do
 			create Result.make_empty
@@ -173,10 +200,35 @@ feature {NONE} -- REPL
 			end
 
 			-- Check for commands (single-line, immediate execution)
-			if not l_line.is_empty and then l_line.item (1) = '-' then
+			-- Special case: -class NAME -> class NAME (triggers multi-line)
+			-- If class already exists, show it and set editing_class_cell for update
+			if not l_line.is_empty and then l_line.as_lower.starts_with ("-class ") then
+				-- Extract class name and check if it exists
+				l_class_name := l_line.substring (8, l_line.count)
+				l_class_name.left_adjust
+				l_class_name.right_adjust
+				l_class_name := l_class_name.as_upper
+				
+				-- Check if this class already exists
+				editing_class_cell := find_class_cell_number (l_class_name)
+				if editing_class_cell > 0 then
+					print ("Editing class " + l_class_name + " (cell " + editing_class_cell.out + "):%N")
+					show_cell_code (editing_class_cell)
+					print ("Type complete new class (starts with 'class " + l_class_name + "'):%N")
+					-- Don't prepend class name - user types full replacement
+					l_line := ""
+				else
+					-- Creating new class - add class header automatically
+					l_line := "class " + l_class_name
+				end
+			elseif not l_line.is_empty and then l_line.item (1) = '-' then
 				Result := l_line
 				Result.left_adjust
 				Result.right_adjust
+			end
+			
+			if not Result.is_empty then
+				-- Already handled as command
 			elseif l_line.is_empty then
 				-- Empty first line = nothing to do
 				Result := ""
@@ -228,7 +280,16 @@ feature {NONE} -- REPL
 		do
 			log_input (a_input)
 			if a_input.starts_with ("-") then
-				process_command (a_input)
+				-- Commands work in both modes
+				if a_input.same_string ("-show") and focused_class_name /= Void then
+					-- Special: -show in focus mode shows class content
+					show_focused_class_content
+				else
+					process_command (a_input)
+				end
+			elseif focused_class_name /= Void then
+				-- In class focus mode: add line to class
+				add_line_to_focused_class (a_input)
 			elseif a_input.same_string ("!!") then
 				-- Re-execute last cell
 				do_history_recall (0)
@@ -295,8 +356,14 @@ feature {NONE} -- REPL
 				else
 					print ("Invalid cell number%N")
 				end
-			elseif l_base_cmd.same_string ("-class") then
+			elseif l_base_cmd.same_string ("-generated") or l_base_cmd.same_string ("-gen") then
 				show_generated_class
+			elseif l_base_cmd.same_string ("-class") then
+				do_class_focus (a_cmd)
+			elseif l_base_cmd.same_string ("-exit") then
+				do_exit_class_focus
+			elseif l_base_cmd.same_string ("-cancel") or l_base_cmd.same_string ("-abort") then
+				do_cancel_class_focus
 			elseif l_base_cmd.same_string ("-debug") then
 				show_debug_classification
 			elseif l_base_cmd.same_string ("-edit") or l_base_cmd.same_string ("-e") then
@@ -347,6 +414,8 @@ feature {NONE} -- REPL
 				else
 					print ("Usage: -history [N] (show last N commands)%N")
 				end
+			elseif l_base_cmd.same_string ("-classes") then
+				show_user_classes
 			else
 				print ("Unknown command: " + l_base_cmd + ". Type -help%N")
 			end
@@ -359,9 +428,27 @@ feature {NONE} -- REPL
 			l_success: BOOLEAN
 			l_cell_count_before: INTEGER
 			l_changes: ARRAYED_LIST [VARIABLE_CHANGE]
+			l_final_code: STRING
+			l_lower: STRING
+			l_is_class_edit: BOOLEAN
 		do
+			-- For class definitions:
+			-- 1. Auto-add 'feature' if no inherit/feature keyword
+			-- 2. Always add class 'end' (user types routine ends, we add class end)
+			l_final_code := a_code
+			if a_code.as_lower.starts_with ("class ") then
+				l_lower := a_code.as_lower
+				-- Add 'feature' after class line if missing and no inherit
+				if not l_lower.has_substring ("feature") and not l_lower.has_substring ("inherit") then
+					-- Insert 'feature' after first line (class NAME)
+					l_final_code := insert_feature_after_class_line (a_code)
+				end
+				-- Always add class 'end'
+				l_final_code := l_final_code + "%Nend"
+			end
+
 			-- Record in history
-			history.add (a_code, cell_number)
+			history.add (l_final_code, cell_number)
 
 			-- Save variable state for change detection
 			notebook.save_variable_state
@@ -372,9 +459,21 @@ feature {NONE} -- REPL
 				"code_not_empty=" + b(not a_code.is_empty) +
 				", cell_count=" + l_cell_count_before.out)
 
-			io.put_string ("Compiling...")
-			l_result := notebook.run (a_code)
-			io.put_string ("%R             %R")
+			if editing_class_cell > 0 then
+				-- Update existing class cell instead of creating new
+				l_is_class_edit := True
+				if attached notebook.engine.current_notebook.cell_at (editing_class_cell) as c then
+					notebook.update_cell (c.id, l_final_code)
+					l_result := "Class " + extract_class_name (l_final_code) + " updated in cell " + editing_class_cell.out + "."
+				else
+					l_result := "Error: cell " + editing_class_cell.out + " not found"
+				end
+				editing_class_cell := 0  -- Reset after update
+			else
+				io.put_string ("Compiling...")
+				l_result := notebook.run (l_final_code)
+				io.put_string ("%R             %R")
+			end
 
 			-- Show compiler output if verbose mode
 			if verbose_compile then
@@ -415,7 +514,9 @@ feature {NONE} -- REPL
 				auto_save
 			end
 
-			cell_number := cell_number + 1
+			if not l_is_class_edit then
+				cell_number := cell_number + 1
+			end
 		end
 
 feature {NONE} -- Commands
@@ -590,6 +691,387 @@ feature {NONE} -- Commands
 					i := i + 1
 				end
 				print ("============================%N")
+			end
+		end
+
+	show_user_classes
+			-- Show list of user-defined classes from cells
+		local
+			l_classifier: CELL_CLASSIFIER
+			l_class_name: STRING
+			l_count, i: INTEGER
+		do
+			create l_classifier.make
+			l_count := 0
+
+			-- Scan cells for class definitions
+			from i := 1 until i > notebook.cell_count loop
+				if attached notebook.engine.current_notebook.cell_at (i) as c then
+					if l_classifier.classify (c.code) = {CELL_CLASSIFIER}.Classification_class then
+						l_class_name := extract_class_name (c.code)
+						if l_count = 0 then
+							print ("User-defined classes:%N")
+						end
+						l_count := l_count + 1
+						print ("  " + l_count.out + ". " + l_class_name + " (cell " + i.out + ")%N")
+					end
+				end
+				i := i + 1
+			end
+
+			if l_count = 0 then
+				print ("No user-defined classes.%N")
+			end
+		end
+
+	extract_class_name (a_code: STRING): STRING
+			-- Extract class name from class definition
+		local
+			l_lower: STRING
+			l_pos, l_end: INTEGER
+		do
+			l_lower := a_code.as_lower
+			l_pos := l_lower.substring_index ("class ", 1)
+			if l_pos > 0 then
+				l_pos := l_pos + 6
+				-- Skip whitespace
+				from until l_pos > a_code.count or else not a_code.item (l_pos).is_space loop
+					l_pos := l_pos + 1
+				end
+				-- Find end of name
+				l_end := l_pos
+				from until l_end > a_code.count or else a_code.item (l_end).is_space or else a_code.item (l_end) = '%N' loop
+					l_end := l_end + 1
+				end
+				if l_end > l_pos then
+					Result := a_code.substring (l_pos, l_end - 1)
+				else
+					Result := "UNKNOWN"
+				end
+			else
+				Result := "UNKNOWN"
+			end
+		end
+
+	is_valid_class_name (a_name: STRING): BOOLEAN
+			-- Is this a valid Eiffel class name?
+			-- Must start with letter, contain only letters/digits/underscores
+		local
+			i: INTEGER
+			c: CHARACTER
+		do
+			if a_name.count > 0 then
+				c := a_name.item (1)
+				if c.is_alpha then
+					Result := True
+					from i := 2 until i > a_name.count or not Result loop
+						c := a_name.item (i)
+						Result := c.is_alpha or c.is_digit or c = '_'
+						i := i + 1
+					end
+				end
+			end
+		end
+
+feature {NONE} -- Class Focus Mode
+
+	do_class_focus (a_cmd: STRING)
+			-- Enter or manage class focus mode
+			-- -class NAME [inherit X Y Z]: focus on class (create if new)
+			-- -class: show current focused class or list if none
+		local
+			l_parts: LIST [STRING]
+			l_name, l_inherit: STRING
+			l_inherit_pos: INTEGER
+		do
+			l_parts := a_cmd.split (' ')
+			if l_parts.count >= 2 then
+				l_name := l_parts.i_th (2).as_upper
+				-- Check for inherit clause
+				l_inherit_pos := a_cmd.as_lower.substring_index (" inherit ", 1)
+				if l_inherit_pos > 0 then
+					l_inherit := a_cmd.substring (l_inherit_pos + 1, a_cmd.count)
+					l_inherit.left_adjust
+				else
+					l_inherit := ""
+				end
+				if not is_valid_class_name (l_name) then
+					print ("Invalid class name: " + l_name + "%N")
+					print ("Class names must start with a letter and contain only letters, digits, underscores.%N")
+				else
+					enter_class_focus_with_inherit (l_name, l_inherit)
+				end
+			else
+				-- No argument: show current focus or list classes
+				if attached focused_class_name as fcn then
+					print ("Currently editing class: " + fcn + "%N")
+					show_focused_class_content
+				else
+					show_user_classes
+					print ("Use: -class NAME to focus on a class%N")
+				end
+			end
+		end
+
+	enter_class_focus_with_inherit (a_name: STRING; a_inherit: STRING)
+			-- Focus on class with given name and optional inherit clause
+		require
+			name_not_empty: not a_name.is_empty
+			valid_class_name: is_valid_class_name (a_name)
+		local
+			l_existing: detachable STRING
+			l_lines: ARRAYED_LIST [STRING]
+		do
+			-- Check if class already exists
+			l_existing := find_existing_class_content (a_name)
+
+			focused_class_name := a_name
+			if a_inherit.is_empty then
+				focused_class_inherit := Void
+			else
+				focused_class_inherit := a_inherit
+			end
+
+			if attached l_existing as existing then
+				-- Parse existing class into lines (content between header and end)
+				focused_class_content := parse_class_content (existing)
+				focused_class_inherit := parse_class_inherit (existing)
+				print ("Editing existing class: " + a_name + "%N")
+			else
+				-- Create new class with empty content
+				create l_lines.make (5)
+				focused_class_content := l_lines
+				if not a_inherit.is_empty then
+					print ("Creating new class: " + a_name + " " + a_inherit + "%N")
+				else
+					print ("Creating new class: " + a_name + "%N")
+				end
+			end
+
+			print ("Add features/attributes. Type -exit when done, -show to see class.%N")
+		end
+
+	parse_class_inherit (a_class_code: STRING): detachable STRING
+			-- Extract inherit clause from class code
+		local
+			l_lower: STRING
+			l_inherit_pos, l_feature_pos: INTEGER
+		do
+			l_lower := a_class_code.as_lower
+			l_inherit_pos := l_lower.substring_index ("inherit", 1)
+			if l_inherit_pos > 0 then
+				l_feature_pos := l_lower.substring_index ("feature", l_inherit_pos)
+				if l_feature_pos > 0 then
+					Result := a_class_code.substring (l_inherit_pos, l_feature_pos - 1)
+					Result.right_adjust
+				end
+			end
+		end
+
+	find_existing_class_content (a_name: STRING): detachable STRING
+			-- Find content of existing class cell by name
+		local
+			l_classifier: CELL_CLASSIFIER
+			l_code_lower: STRING
+			i: INTEGER
+		do
+			create l_classifier.make
+			from i := 1 until i > notebook.cell_count or Result /= Void loop
+				if attached notebook.engine.current_notebook.cell_at (i) as c then
+					if l_classifier.classify (c.code) = {CELL_CLASSIFIER}.Classification_class then
+						l_code_lower := c.code.as_lower
+						if l_code_lower.has_substring ("class " + a_name.as_lower) then
+							Result := c.code
+						end
+					end
+				end
+				i := i + 1
+			end
+		end
+
+	parse_class_content (a_class_code: STRING): ARRAYED_LIST [STRING]
+			-- Extract content lines between class header and end
+		local
+			l_lines: LIST [STRING]
+			l_in_content: BOOLEAN
+			l_lower: STRING
+		do
+			create Result.make (10)
+			l_lines := a_class_code.split ('%N')
+			l_in_content := False
+
+			across l_lines as ln loop
+				l_lower := ln.as_lower
+				l_lower.left_adjust
+				if not l_in_content then
+					-- Skip until we pass the class header
+					if l_lower.starts_with ("class ") then
+						l_in_content := True
+					end
+				else
+					-- Stop at end keyword
+					if l_lower.same_string ("end") then
+						-- Don't add the end
+					else
+						Result.extend (ln.twin)
+					end
+				end
+			end
+		end
+
+	do_exit_class_focus
+			-- Exit class focus mode and save class as cell
+		local
+			l_class_code: STRING
+		do
+			if attached focused_class_name as fcn then
+				if attached focused_class_content as fcc then
+					-- Build complete class code
+					l_class_code := build_class_code (fcn, fcc)
+
+					-- Add or update as a cell
+					update_class_cell (fcn, l_class_code)
+
+					print ("Class " + fcn + " saved. Exiting focus mode.%N")
+				end
+				focused_class_name := Void
+				focused_class_content := Void
+			else
+				print ("Not in class focus mode.%N")
+			end
+		end
+
+	do_cancel_class_focus
+			-- Exit class focus mode WITHOUT saving
+		do
+			if attached focused_class_name as fcn then
+				print ("Discarded class " + fcn + ". Exiting focus mode.%N")
+				focused_class_name := Void
+				focused_class_content := Void
+			else
+				print ("Not in class focus mode.%N")
+			end
+		end
+
+	build_class_code (a_name: STRING; a_lines: ARRAYED_LIST [STRING]): STRING
+			-- Build complete class code from name and content lines
+			-- Each entry in a_lines is a multi-line block (one per user input)
+			-- Smart auto-insert of "feature":
+			-- - If first block starts with "inherit", insert feature AFTER that block
+			-- - Otherwise insert feature BEFORE all blocks
+		local
+			l_has_feature: BOOLEAN
+			l_starts_with_inherit: BOOLEAN
+			l_first: BOOLEAN
+		do
+			create Result.make (500)
+			Result.append ("class " + a_name + "%N")
+
+			-- Scan for feature keyword and check if first block is inherit
+			across a_lines as ln loop
+				if ln.as_lower.has_substring ("feature") then
+					l_has_feature := True
+				end
+			end
+			if not a_lines.is_empty then
+				l_starts_with_inherit := a_lines.first.as_lower.starts_with ("inherit")
+			end
+
+			if l_has_feature then
+				-- User added feature themselves, just output all blocks
+				across a_lines as ln loop
+					Result.append (ln)
+					Result.append ("%N")
+				end
+			elseif l_starts_with_inherit then
+				-- First block is inherit - output it, then add feature, then rest
+				l_first := True
+				across a_lines as ln loop
+					Result.append (ln)
+					Result.append ("%N")
+					if l_first then
+						-- After inherit block, insert feature
+						Result.append ("%Nfeature%N%N")
+						l_first := False
+					end
+				end
+				-- If only inherit block (no features yet), still add feature
+				if a_lines.count = 1 then
+					Result.append ("%Nfeature%N")
+				end
+			elseif not a_lines.is_empty then
+				-- No inherit, no feature - insert feature at start
+				Result.append ("%Nfeature%N%N")
+				across a_lines as ln loop
+					Result.append (ln)
+					Result.append ("%N")
+				end
+			end
+
+			Result.append ("%Nend")
+		end
+
+	update_class_cell (a_name: STRING; a_code: STRING)
+			-- Update existing class cell or create new one
+		local
+			l_classifier: CELL_CLASSIFIER
+			l_code_lower: STRING
+			l_found: BOOLEAN
+			l_cell_id: STRING
+			i: INTEGER
+		do
+			create l_classifier.make
+
+			-- Try to find existing class cell
+			from i := 1 until i > notebook.cell_count or l_found loop
+				if attached notebook.engine.current_notebook.cell_at (i) as c then
+					if l_classifier.classify (c.code) = {CELL_CLASSIFIER}.Classification_class then
+						l_code_lower := c.code.as_lower
+						if l_code_lower.has_substring ("class " + a_name.as_lower) then
+							-- Update existing cell using its ID
+							l_cell_id := c.id
+							notebook.update_cell (l_cell_id, a_code)
+							l_found := True
+						end
+					end
+				end
+				i := i + 1
+			end
+
+			if not l_found then
+				-- Add as new cell
+				notebook.add_cell (a_code).do_nothing
+				cell_number := cell_number + 1
+			end
+		end
+
+	show_focused_class_content
+			-- Display current focused class content
+		local
+			l_line_num: INTEGER
+		do
+			if attached focused_class_name as fcn and attached focused_class_content as fcc then
+				print ("=== class " + fcn + " ===%N")
+				l_line_num := 1
+				across fcc as ln loop
+					print ("  " + l_line_num.out + ": " + ln + "%N")
+					l_line_num := l_line_num + 1
+				end
+				print ("  end%N")
+				print ("=====================%N")
+			end
+		end
+
+	add_line_to_focused_class (a_line: STRING)
+			-- Add a line to the focused class content
+		require
+			in_focus_mode: focused_class_name /= Void
+		do
+			if attached focused_class_content as fcc then
+				fcc.extend (a_line)
+				print ("  Added: " + a_line.substring (1, a_line.count.min (50)))
+				if a_line.count > 50 then print ("...") end
+				print ("%N")
 			end
 		end
 
@@ -828,6 +1310,21 @@ feature {NONE} -- History
 
 feature {NONE} -- Helpers
 
+	insert_feature_after_class_line (a_code: STRING): STRING
+			-- Insert 'feature' keyword after the class line
+		local
+			l_newline_pos: INTEGER
+		do
+			l_newline_pos := a_code.index_of ('%N', 1)
+			if l_newline_pos > 0 then
+				-- Insert after first line
+				Result := a_code.substring (1, l_newline_pos) + "feature%N" + a_code.substring (l_newline_pos + 1, a_code.count)
+			else
+				-- Single line class (unlikely)
+				Result := a_code + "%Nfeature"
+			end
+		end
+
 	formatted_line_number (a_num: INTEGER): STRING
 			-- Format line number with padding
 		do
@@ -837,6 +1334,28 @@ feature {NONE} -- Helpers
 				Result := "  " + a_num.out + "  "
 			else
 				Result := " " + a_num.out + "  "
+			end
+		end
+
+	find_class_cell_number (a_name: STRING): INTEGER
+			-- Find cell number containing class with given name
+			-- Returns 0 if not found
+		local
+			l_classifier: CELL_CLASSIFIER
+			l_code_lower: STRING
+			i: INTEGER
+		do
+			create l_classifier.make
+			from i := 1 until i > notebook.cell_count or Result > 0 loop
+				if attached notebook.engine.current_notebook.cell_at (i) as c then
+					if l_classifier.classify (c.code) = {CELL_CLASSIFIER}.Classification_class then
+						l_code_lower := c.code.as_lower
+						if l_code_lower.has_substring ("class " + a_name.as_lower) then
+							Result := i
+						end
+					end
+				end
+				i := i + 1
 			end
 		end
 
@@ -1017,8 +1536,15 @@ feature {NONE} -- Logging
 			print ("  -history [N]   Show last N commands (default 20)%N")
 			print ("  !N             Re-execute cell N%N")
 			print ("  !!             Re-execute last cell%N")
+			print ("%NClass Editing:%N")
+			print ("  -class NAME    Create or edit class (replaces if exists)%N")
+			print ("  -class         Show focused class / list classes%N")
+			print ("  -exit          Exit class focus, save class%N")
+			print ("  -cancel/-abort Exit class focus, discard changes%N")
+			print ("  -show          (in focus mode) Show class content%N")
+			print ("  -classes       List user-defined classes%N")
 			print ("%NInspection (see generated code):%N")
-			print ("  -class         Show full generated Eiffel class%N")
+			print ("  -generated     Show full generated Eiffel class%N")
 			print ("  -code N        Show how cell N appears in class%N")
 			print ("  -vars, -v      Show tracked variables%N")
 			print ("  -debug         Show cell classifications%N")
@@ -1031,6 +1557,7 @@ feature {NONE} -- Logging
 			print ("  f do ... end         -> routine%N")
 			print ("  x := 42              -> instruction%N")
 			print ("  x + 1                -> expression (printed)%N")
+			print ("  class FOO ... end    -> user class%N")
 			print ("%NVersion: " + Version + "%N")
 			print ("Session log: " + log_path + "%N%N")
 		end

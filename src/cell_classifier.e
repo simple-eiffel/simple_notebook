@@ -89,15 +89,29 @@ feature -- Classification Queries
 	is_user_class (a_code: STRING): BOOLEAN
 			-- Is this a class definition?
 			-- Pattern: class NAME ... end
+			-- Requires proper closing 'end' keyword
 		require
 			code_not_void: a_code /= Void
 		local
 			l_lower: STRING
 		do
 			l_lower := a_code.as_lower
-			-- Must start with "class " AND (have " end" or end with "end")
+			-- Must start with "class " AND properly end with "end" keyword
+			-- The end must be at end of string, or followed by whitespace/newline
 			Result := l_lower.starts_with ("class ") and then
-			          (l_lower.has_substring (" end") or else l_lower.ends_with ("end"))
+			          has_closing_end_keyword (l_lower)
+		end
+
+	has_closing_end_keyword (a_lower: STRING): BOOLEAN
+			-- Does this class have a proper closing 'end' keyword?
+			-- Must be: ends with "end", or "end%N", or "end " followed by only whitespace
+		local
+			l_trimmed: STRING
+		do
+			l_trimmed := a_lower.twin
+			l_trimmed.right_adjust  -- Remove trailing whitespace/newlines
+			-- After trimming, must end with "end"
+			Result := l_trimmed.ends_with ("end")
 		end
 
 	is_routine (a_code: STRING): BOOLEAN
