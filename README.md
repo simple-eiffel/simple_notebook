@@ -16,7 +16,7 @@ Part of the [Simple Eiffel](https://github.com/simple-eiffel) ecosystem.
 
 ## Status
 
-**Alpha** - 80 tests passing, Phase 2 complete (session persistence, command history)
+**Alpha** - 80 tests passing, Phase 4 complete (melt mode, session persistence, command history)
 
 ## Overview
 
@@ -48,7 +48,7 @@ result := nb.run ("print (%"Hello, Eiffel!%")")
 Run `eiffel_notebook` for an interactive REPL session:
 
 ```
-Eiffel Notebook 1.0.0-alpha.21
+Eiffel Notebook 1.0.0-alpha.24
 Type Eiffel code to execute. Type -help for commands.
 
 e[1]> name: STRING := "World"
@@ -103,21 +103,46 @@ Cells are automatically classified by their content:
 
 | Content | Classification | Action |
 |---------|----------------|--------|
-| `x: INTEGER` | Attribute | Added to cumulative class |
-| `f (a: INTEGER) do ... end` | Routine | Added to cumulative class |
+| `x: INTEGER` | Attribute | Added to accumulated class |
+| `f (a: INTEGER) do ... end` | Routine | Added to accumulated class |
 | `x := 42` | Instruction | Executed in `execute_cell_N` |
 | `x * 2` | Expression | Evaluated and result printed |
-| `class FOO ... end` | Class | Generated as separate class file |
 
 ## Features
 
 - **Natural Eiffel syntax**: No special keywords - write normal Eiffel
 - **Attribute persistence**: Attributes declared in any cell persist across cells
 - **Routine definitions**: Define routines with full DBC contracts
-- **Class definitions**: Define auxiliary classes within notebooks
 - **Variable tracking**: Monitor state changes (new/modified/removed)
 - **Error mapping**: Compilation errors traced back to originating cell and line
 - **JSON persistence**: Save/load notebooks
+- **Melt mode**: 10-30x faster execution after initial compile (uses EiffelStudio's Melting Ice bytecode interpreter)
+- **Session persistence**: Save/restore notebook sessions
+
+## Current Limitations
+
+The notebook operates within a **single accumulated class**. This means:
+
+| Supported | Not Yet Supported |
+|-----------|-------------------|
+| Attributes (`x: INTEGER`) | Multi-class definitions (`class CAR ... end`) |
+| Routines with DBC | Multiple inheritance experiments |
+| Instructions and expressions | Generic class definitions |
+| Local variables | Separate class files |
+
+**Why?** All cells compile into one `ACCUMULATED_SESSION_xxx` class. Multi-class support would require generating separate `.e` files and is planned for a future phase.
+
+**Comparison to other REPLs:**
+
+| Language | Multi-class in REPL? | How? |
+|----------|---------------------|------|
+| Python/Ruby/JS | ✅ Yes | Interpreted - classes are runtime objects |
+| Scala/Kotlin | ✅ Yes | Incremental JVM bytecode compilation |
+| Swift | ✅ Yes | LLVM JIT compilation |
+| Java JShell | ✅ Yes | Special compiler integration |
+| **Eiffel Notebook** | ❌ Not yet | Compiles to C - multi-class planned |
+
+Multi-class support is on the roadmap and would enable multiple inheritance experiments - something unique for an Eiffel REPL.
 
 ## Examples
 
@@ -173,47 +198,11 @@ compute
 
 Output: `40`
 
-### Class Definitions
-
-```eiffel
--- Cell 1: Define a class
-class POINT
-create
-    make
-feature
-    x, y: INTEGER
-    make (a_x, a_y: INTEGER)
-        do
-            x := a_x
-            y := a_y
-        end
-    distance: REAL_64
-        do
-            Result := {MATH}.sqrt ((x * x + y * y).to_double)
-        end
-end
-
--- Cell 2: Use the class
-my_point: POINT
-use_point: REAL_64
-    local
-        p: POINT
-    do
-        create p.make (3, 4)
-        Result := p.distance
-    end
-
--- Cell 3: Show result
-use_point
-```
-
-Output: `5.0`
-
 ## Installation
 
 ### Windows
 
-Download and run the installer: `eiffel_notebook_setup_1.0.0-alpha.22.exe`
+Download and run the installer: `eiffel_notebook_setup_1.0.0-alpha.24.exe`
 
 The installer:
 - Installs the interactive CLI to `C:\Program Files\EiffelNotebook`
@@ -356,8 +345,9 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed design documentati
 - **Phase 1**: Core engine (COMPLETE) - 80 tests passing
 - **Phase 2**: Cell classification + Eric Bezault design (COMPLETE)
 - **Phase 3**: CLI/REPL interface (COMPLETE) - alpha.21 released
-- **Phase 4**: Enhanced UX (COMPLETE) - variable change markers, session persistence, command history
-- **Phase 5**: Web interface (planned) - browser-based notebook UI
+- **Phase 4**: Enhanced UX (COMPLETE) - variable tracking, session persistence, command history, melt mode (10-30x faster)
+- **Phase 5**: Multi-class support (PLANNED) - define CAR, SUBMARINE, JAMES_BOND_CAR with multiple inheritance
+- **Phase 6**: Web interface (PLANNED) - browser-based notebook UI
 
 ## Acknowledgments
 
