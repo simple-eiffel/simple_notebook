@@ -1,12 +1,12 @@
 [Setup]
 AppName=Eiffel Notebook
-AppVersion=1.0.0-alpha.20
+AppVersion=1.0.0-alpha.22
 AppPublisher=Simple Eiffel
 AppPublisherURL=https://github.com/simple-eiffel/simple_notebook
 DefaultDirName={autopf}\EiffelNotebook
 DefaultGroupName=Eiffel Notebook
 OutputDir=installer
-OutputBaseFilename=eiffel_notebook_setup_1.0.0-alpha.20
+OutputBaseFilename=eiffel_notebook_setup_1.0.0-alpha.22
 Compression=lzma
 SolidCompression=yes
 ArchitecturesInstallIn64BitMode=x64

@@ -16,7 +16,7 @@ Part of the [Simple Eiffel](https://github.com/simple-eiffel) ecosystem.
 
 ## Status
 
-**Alpha** - 80 tests passing, streaming compilation, auto-detect EiffelStudio
+**Alpha** - 80 tests passing, Phase 2 complete (session persistence, command history)
 
 ## Overview
 
@@ -48,7 +48,7 @@ result := nb.run ("print (%"Hello, Eiffel!%")")
 Run `eiffel_notebook` for an interactive REPL session:
 
 ```
-Eiffel Notebook 1.0.0-alpha.20
+Eiffel Notebook 1.0.0-alpha.21
 Type Eiffel code to execute. Type -help for commands.
 
 e[1]> name: STRING := "World"
@@ -89,6 +89,13 @@ Goodbye!
 | `-compile verbose/silent` | Toggle compiler output streaming |
 | `-class` | Show generated Eiffel class |
 | `-debug` | Show cell classifications |
+| `-save [name]` | Save notebook / Save As |
+| `-open <name>` | Open notebook |
+| `-new` | Start fresh notebook |
+| `-notebooks` | List saved notebooks |
+| `-history [N]` | Show last N commands |
+| `!N` | Re-execute cell N |
+| `!!` | Re-execute last cell |
 
 ## Cell Classification
 
@@ -206,7 +213,7 @@ Output: `5.0`
 
 ### Windows
 
-Download and run the installer: `eiffel_notebook_setup_1.0.0-alpha.20.exe`
+Download and run the installer: `eiffel_notebook_setup_1.0.0-alpha.22.exe`
 
 The installer:
 - Installs the interactive CLI to `C:\Program Files\EiffelNotebook`
@@ -348,8 +355,8 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed design documentati
 
 - **Phase 1**: Core engine (COMPLETE) - 80 tests passing
 - **Phase 2**: Cell classification + Eric Bezault design (COMPLETE)
-- **Phase 3**: CLI/REPL interface (COMPLETE) - alpha.20 released
-- **Phase 4**: Enhanced UX (planned) - variable change markers, session persistence, command history
+- **Phase 3**: CLI/REPL interface (COMPLETE) - alpha.21 released
+- **Phase 4**: Enhanced UX (COMPLETE) - variable change markers, session persistence, command history
 - **Phase 5**: Web interface (planned) - browser-based notebook UI
 
 ## Acknowledgments

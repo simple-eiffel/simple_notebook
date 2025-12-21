@@ -12,21 +12,28 @@ create
 
 feature -- Constants
 
-	Version: STRING = "1.0.0-alpha.20"
+	Version: STRING = "1.0.0-alpha.23"
 			-- Current version for issue tracking
 
 	Log_file_name: STRING = "eiffel_notebook_session.log"
 			-- Session log filename
 
+	Default_notebook_name: STRING = "default"
+			-- Default notebook name when none specified
+
+	Notebooks_subdir: STRING = "notebooks"
+			-- Subdirectory for notebook files
+
 feature {NONE} -- Initialization
 
 	make
 			-- Launch interactive notebook session
-		local
-			l_config_path: PATH
 		do
 			load_config
 			create notebook.make_with_config (loaded_config)
+			init_storage
+			init_history
+			current_notebook_name := Default_notebook_name
 			init_session_log
 			running := True
 			log_event ("Session started", "version=" + Version)
@@ -45,10 +52,10 @@ feature {NONE} -- Initialization
 		do
 			create l_env
 			-- Try to find config.json next to the executable
-			if attached l_env.command_line.argument (0) as exe_path then
-				l_exe_dir := exe_path.substring (1, exe_path.last_index_of ('\', exe_path.count))
+			if attached l_env.arguments.argument (0) as exe_path then
+				l_exe_dir := exe_path.substring (1, exe_path.last_index_of ('\', exe_path.count)).to_string_8
 				if l_exe_dir.is_empty then
-					l_exe_dir := exe_path.substring (1, exe_path.last_index_of ('/', exe_path.count))
+					l_exe_dir := exe_path.substring (1, exe_path.last_index_of ('/', exe_path.count)).to_string_8
 				end
 			end
 
@@ -96,6 +103,18 @@ feature -- Access
 	verbose_compile: BOOLEAN
 			-- Show compiler output during execution?
 
+	storage: detachable NOTEBOOK_STORAGE
+			-- Notebook file storage
+
+	current_notebook_name: STRING
+			-- Name of current notebook (without extension)
+
+	scratch_mode: BOOLEAN
+			-- If True, no auto-save
+
+	history: COMMAND_HISTORY
+			-- Command history manager
+
 feature {NONE} -- REPL
 
 	repl_loop
@@ -118,9 +137,16 @@ feature {NONE} -- REPL
 		end
 
 	print_prompt
-			-- Display the input prompt
+			-- Display the input prompt with dirty indicator
+		local
+			l_dirty: STRING
 		do
-			io.put_string ("e[" + cell_number.out + "]> ")
+			if notebook.is_dirty then
+				l_dirty := "*"
+			else
+				l_dirty := ""
+			end
+			io.put_string ("e[" + cell_number.out + "]" + l_dirty + "> ")
 		end
 
 	read_input: STRING
@@ -193,13 +219,30 @@ feature {NONE} -- REPL
 		end
 
 	process_input (a_input: STRING)
-			-- Process user input (command or code)
+			-- Process user input (command, history recall, or code)
 		require
 			input_not_empty: not a_input.is_empty
+		local
+			l_num_str: STRING
+			l_num: INTEGER
 		do
 			log_input (a_input)
 			if a_input.starts_with ("-") then
 				process_command (a_input)
+			elseif a_input.same_string ("!!") then
+				-- Re-execute last cell
+				do_history_recall (0)
+			elseif a_input.starts_with ("!") and a_input.count > 1 then
+				-- Re-execute cell N
+				l_num_str := a_input.substring (2, a_input.count)
+				l_num_str.left_adjust
+				l_num_str.right_adjust
+				if l_num_str.is_integer then
+					l_num := l_num_str.to_integer
+					do_history_recall (l_num)
+				else
+					execute_code (a_input)
+				end
 			else
 				execute_code (a_input)
 			end
@@ -280,6 +323,28 @@ feature {NONE} -- REPL
 					if verbose_compile then print ("verbose") else print ("silent") end
 					print (")%N")
 				end
+			-- Session management commands
+			elseif l_base_cmd.same_string ("-save") then
+				do_save (l_arg)
+			elseif l_base_cmd.same_string ("-open") or l_base_cmd.same_string ("-restore") then
+				if l_arg.is_empty then
+					print ("Usage: -open <name> (open notebook)%N")
+				else
+					do_open (l_arg)
+				end
+			elseif l_base_cmd.same_string ("-new") then
+				do_new
+			elseif l_base_cmd.same_string ("-notebooks") or l_base_cmd.same_string ("-list") then
+				do_list_notebooks
+			-- History commands
+			elseif l_base_cmd.same_string ("-history") then
+				if l_arg.is_empty then
+					do_show_history (20)
+				elseif l_arg.is_integer then
+					do_show_history (l_arg.to_integer)
+				else
+					print ("Usage: -history [N] (show last N commands)%N")
+				end
 			else
 				print ("Unknown command: " + l_base_cmd + ". Type -help%N")
 			end
@@ -291,7 +356,14 @@ feature {NONE} -- REPL
 			l_result: STRING
 			l_success: BOOLEAN
 			l_cell_count_before: INTEGER
+			l_changes: ARRAYED_LIST [VARIABLE_CHANGE]
 		do
+			-- Record in history
+			history.add (a_code, cell_number)
+
+			-- Save variable state for change detection
+			notebook.save_variable_state
+
 			-- DBC trace: caller logs preconditions before call
 			l_cell_count_before := notebook.cell_count
 			log_dbc_call ("CLI.execute_code", "NOTEBOOK.run",
@@ -327,6 +399,20 @@ feature {NONE} -- REPL
 			end
 
 			log_output (l_result, l_success)
+
+			-- Show variable changes if any
+			l_changes := notebook.variable_changes
+			if not l_changes.is_empty then
+				across l_changes as c loop
+					print (c.formatted + "%N")
+				end
+			end
+
+			-- Auto-save if not in scratch mode
+			if not scratch_mode then
+				auto_save
+			end
+
 			cell_number := cell_number + 1
 		end
 
@@ -585,6 +671,159 @@ feature {NONE} -- Commands
 			end
 		end
 
+feature {NONE} -- Session Management
+
+	init_storage
+			-- Initialize notebook storage
+		local
+			l_notebooks_dir: PATH
+		do
+			l_notebooks_dir := notebook.config.workspace_dir.extended (Notebooks_subdir)
+			create storage.make (l_notebooks_dir)
+		end
+
+	init_history
+			-- Initialize command history
+		do
+			create history.make (notebook.config.workspace_dir)
+		end
+
+	auto_save
+			-- Auto-save current notebook
+		do
+			if attached storage as s then
+				if s.save (notebook.engine.current_notebook, current_notebook_name) then
+					-- Saved successfully, mark clean
+					notebook.engine.mark_clean
+				end
+			end
+		end
+
+	do_save (a_name: STRING)
+			-- Handle -save [name] command
+		do
+			if a_name.is_empty then
+				-- Save to current notebook
+				auto_save
+				print ("Saved: " + current_notebook_name + ".enb%N")
+			else
+				-- Save As: copy to new name
+				current_notebook_name := a_name
+				auto_save
+				print ("Saved as: " + current_notebook_name + ".enb%N")
+			end
+		end
+
+	do_open (a_name: STRING)
+			-- Handle -open command
+		do
+			if attached storage as s then
+				if s.exists (a_name) then
+					if attached s.load (a_name) as nb then
+						notebook.engine.replace_notebook (nb)
+						current_notebook_name := a_name
+						cell_number := notebook.cell_count + 1
+						print ("Opened: " + a_name + ".enb (" + notebook.cell_count.out + " cells)%N")
+					else
+						if attached s.last_error as l_err then
+						print ("Error loading: " + l_err + "%N")
+					else
+						print ("Error loading notebook%N")
+					end
+					end
+				else
+					-- Create new notebook with this name
+					notebook.new_notebook
+					current_notebook_name := a_name
+					cell_number := 1
+					auto_save
+					print ("Created new notebook: " + a_name + ".enb%N")
+				end
+			end
+		end
+
+	do_new
+			-- Handle -new command
+		do
+			notebook.new_notebook
+			current_notebook_name := Default_notebook_name
+			cell_number := 1
+			print ("New notebook started. Use -save <name> to name it.%N")
+		end
+
+	do_list_notebooks
+			-- Handle -notebooks/-list command
+		local
+			l_files: ARRAYED_LIST [STRING]
+		do
+			if attached storage as s then
+				l_files := s.list_notebooks
+				if l_files.is_empty then
+					print ("No saved notebooks.%N")
+				else
+					print ("Notebooks:%N")
+					across l_files as f loop
+						if f.same_string (current_notebook_name + ".enb") then
+							print ("  * " + f + " (current)%N")
+						else
+							print ("    " + f + "%N")
+						end
+					end
+				end
+			end
+		end
+
+feature {NONE} -- History
+
+	do_show_history (a_count: INTEGER)
+			-- Show last a_count history entries
+		require
+			positive: a_count > 0
+		local
+			l_entries: ARRAYED_LIST [HISTORY_ENTRY]
+			i: INTEGER
+		do
+			l_entries := history.recent (a_count)
+			if l_entries.is_empty then
+				print ("No history.%N")
+			else
+				print ("History (last " + l_entries.count.out + "):" + "%N")
+				from
+					i := l_entries.count
+				until
+					i < 1
+				loop
+					print ("  " + l_entries.i_th (i).formatted + "%N")
+					i := i - 1
+				end
+			end
+		end
+
+	do_history_recall (a_cell_num: INTEGER)
+			-- Re-execute code from history by cell number
+			-- If a_cell_num = 0, use last entry
+		local
+			l_entry: detachable HISTORY_ENTRY
+			l_code: STRING
+		do
+			if a_cell_num = 0 then
+				l_entry := history.last_entry
+			else
+				l_entry := history.find_by_cell (a_cell_num)
+			end
+			if l_entry /= Void then
+				l_code := l_entry.input
+				print ("Recalling: " + l_entry.first_line + "%N")
+				execute_code (l_code)
+			else
+				if a_cell_num = 0 then
+					print ("No history to recall.%N")
+				else
+					print ("Cell " + a_cell_num.out + " not found in history.%N")
+				end
+			end
+		end
+
 feature {NONE} -- Helpers
 
 	formatted_line_number (a_num: INTEGER): STRING
@@ -767,6 +1006,15 @@ feature {NONE} -- Logging
 			print ("%NExecution:%N")
 			print ("  -run, -r       Re-run all cells%N")
 			print ("  -compile verbose|silent  Show/hide compiler output%N")
+			print ("%NNotebook (session persistence):%N")
+			print ("  -save [name]   Save current / Save As%N")
+			print ("  -open <name>   Open notebook (alias: -restore)%N")
+			print ("  -new           Start fresh notebook%N")
+			print ("  -notebooks     List saved notebooks (alias: -list)%N")
+			print ("%NHistory:%N")
+			print ("  -history [N]   Show last N commands (default 20)%N")
+			print ("  !N             Re-execute cell N%N")
+			print ("  !!             Re-execute last cell%N")
 			print ("%NInspection (see generated code):%N")
 			print ("  -class         Show full generated Eiffel class%N")
 			print ("  -code N        Show how cell N appears in class%N")

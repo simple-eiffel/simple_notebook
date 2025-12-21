@@ -103,29 +103,29 @@ feature -- Status
 feature -- Output
 
 	formatted: STRING
-			-- Formatted for display
+			-- Formatted for display: "x: 42 → 52  (modified)"
 		do
 			create Result.make (50)
-			Result.append (marker)
+			Result.append ("  ")
 			Result.append (name)
+			Result.append (": ")
 
 			if is_new then
-				Result.append (": ")
-				Result.append (type_name)
 				if not new_value.is_empty then
-					Result.append (" = ")
 					Result.append (new_value)
+				else
+					Result.append (type_name)
 				end
+				Result.append ("  (new)")
 
 			elseif is_modified then
-				Result.append (" = ")
-				Result.append (new_value)
-				Result.append (" (was: ")
 				Result.append (old_value)
-				Result.append (")")
+				Result.append (" -> ")
+				Result.append (new_value)
+				Result.append ("  (modified)")
 
 			elseif is_removed then
-				Result.append (" (removed)")
+				Result.append ("--  (removed)")
 			end
 		end
 

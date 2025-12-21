@@ -156,6 +156,27 @@ feature -- Status
 
 feature -- Cell Operations
 
+feature -- Change Tracking
+
+	save_variable_state
+			-- Save current variable state for later comparison
+		do
+			engine.save_variable_state
+		end
+
+	variable_changes: ARRAYED_LIST [VARIABLE_CHANGE]
+			-- Get changes since last save_variable_state call
+		do
+			Result := engine.variable_changes
+		end
+
+	has_variable_changes: BOOLEAN
+			-- Were there any variable changes since last save?
+		do
+			Result := engine.has_variable_changes
+		end
+
+
 	add_cell (a_code: STRING): STRING
 			-- Add code cell and return cell ID
 		require

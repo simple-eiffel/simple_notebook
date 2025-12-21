@@ -105,6 +105,47 @@ feature -- Status
 
 feature -- Session Management
 
+	mark_clean
+			-- Mark notebook as not dirty (just saved)
+		do
+			is_dirty := False
+		end
+
+	replace_notebook (a_notebook: NOTEBOOK)
+			-- Replace current notebook with loaded one
+		require
+			notebook_not_void: a_notebook /= Void
+		local
+			l_vars: ARRAYED_LIST [VARIABLE_INFO]
+		do
+			current_notebook := a_notebook
+			is_dirty := False
+			-- Re-extract variables from loaded notebook
+			variable_tracker.clear
+			l_vars := variable_tracker.extract_variables (current_notebook)
+		end
+
+feature -- Change Tracking
+
+	save_variable_state
+			-- Save current variable state for later comparison
+		do
+			variable_tracker.save_state
+		end
+
+	variable_changes: ARRAYED_LIST [VARIABLE_CHANGE]
+			-- Get changes since last save_variable_state call
+		do
+			Result := variable_tracker.changes_since_save
+		end
+
+	has_variable_changes: BOOLEAN
+			-- Were there any variable changes since last save?
+		do
+			Result := not variable_changes.is_empty
+		end
+
+
 	new_session
 			-- Start a new notebook session
 		do

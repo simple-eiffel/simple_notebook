@@ -111,6 +111,7 @@ feature {NONE} -- Compilation
 
 	compile_generated_class (a_class_name: STRING): COMPILATION_RESULT
 			-- Compile the generated class using EiffelStudio
+			-- Uses freeze on first run, quick_melt on subsequent (10-30x faster!)
 		local
 			l_cmd: STRING
 			l_start_time: DATE_TIME
@@ -118,24 +119,34 @@ feature {NONE} -- Compilation
 			l_ecf_path, l_exe_path: PATH
 			l_stdout, l_stderr: STRING
 			l_old_exe: SIMPLE_FILE
+			l_was_frozen: BOOLEAN
 		do
 			create l_start_time.make_now
 			l_ecf_path := workspace_ecf_path
 
-			-- Delete old executable to prevent linker lock issues on Windows
-			l_exe_path := find_executable (a_class_name)
-			create l_old_exe.make (l_exe_path.name)
-			if l_old_exe.exists then
-				l_old_exe.delete.do_nothing
+			-- Check if we have a frozen exe (can use fast melt mode)
+			check_frozen_status
+			l_was_frozen := is_frozen
+
+			-- Show mode indicator
+			if is_frozen then
+				print ("(melt) ")
+			else
+				print ("(freeze) ")
 			end
 
-			-- Build compile command
-			l_cmd := "%"" + config.eiffel_compiler.name.to_string_8 + "%"" +
-			        " -batch" +
-			        " -clean" +
-			        " -config %"" + l_ecf_path.name.to_string_8 + "%"" +
-			        " -target notebook_session" +
-			        " -c_compile"
+			-- Only delete old exe if we're doing a fresh freeze
+			-- Melting needs the existing exe (it contains the bytecode interpreter!)
+			if not is_frozen then
+				l_exe_path := find_executable (a_class_name)
+				create l_old_exe.make (l_exe_path.name)
+				if l_old_exe.exists then
+					l_old_exe.delete.do_nothing
+				end
+			end
+
+			-- Build compile command (freeze or quick_melt)
+			l_cmd := build_compile_command (l_ecf_path)
 
 			-- Run compiler with streaming output
 			l_stdout := run_with_streaming_output (l_cmd, workspace_path.name.to_string_8)
@@ -143,22 +154,29 @@ feature {NONE} -- Compilation
 
 			l_elapsed_ms := elapsed_milliseconds (l_start_time)
 
-			-- Check if exe was created (ec.exe returns 0 even on errors!)
+			-- Check if exe exists (ec.exe returns 0 even on errors!)
 			l_exe_path := find_executable (a_class_name)
 			create l_old_exe.make (l_exe_path.name)
 
 			if l_old_exe.exists then
-				-- Compilation succeeded - exe was created
+				-- Compilation succeeded
 				create Result.make (True, l_stdout, l_stderr)
 				Result.set_executable_path (l_exe_path)
 				Result.set_compilation_time_ms (l_elapsed_ms)
+				-- Mark as frozen after successful freeze
+				if not l_was_frozen then
+					is_frozen := True
+				end
 			else
 				-- Compilation failed - parse errors from output
-				-- LOG to file for debugging
 				log_compile_failure (l_cmd, l_stdout, l_stderr)
 				create Result.make (False, l_stdout, l_stderr)
 				Result.set_compilation_time_ms (l_elapsed_ms)
 				Result.errors.append (error_parser.parse_errors (l_stdout + "%N" + l_stderr))
+				-- If melt failed, try resetting to force fresh freeze next time
+				if l_was_frozen then
+					is_frozen := False
+				end
 			end
 		end
 
@@ -359,6 +377,63 @@ feature {NONE} -- Implementation
 	process: SIMPLE_PROCESS
 			-- Process executor
 
+	is_frozen: BOOLEAN
+			-- Has initial freeze been done?
+			-- After freeze, we can use fast melt mode (no C compilation)
+
+feature {NONE} -- Melt Mode
+
+	check_frozen_status
+			-- Check if W_code exe exists (meaning freeze was done previously)
+		local
+			l_exe_file: SIMPLE_FILE
+		do
+			if not is_frozen then
+				create l_exe_file.make (find_executable ("notebook_session").name)
+				is_frozen := l_exe_file.exists
+			end
+		ensure
+			stable_if_frozen: old is_frozen implies is_frozen
+		end
+
+	reset_frozen_status
+			-- Force fresh freeze on next compile (e.g., after config change)
+		do
+			is_frozen := False
+		ensure
+			not_frozen: not is_frozen
+		end
+
+	build_compile_command (a_ecf_path: PATH): STRING
+			-- Build the appropriate compile command
+			-- Freeze with C compile on first run, quick_melt on subsequent
+		do
+			create Result.make (200)
+			Result.append ("%"")
+			Result.append (config.eiffel_compiler.name.to_string_8)
+			Result.append ("%"")
+			Result.append (" -batch")
+
+			if is_frozen then
+				-- FAST PATH: Already frozen, just melt (no C compile!)
+				Result.append (" -config %"")
+				Result.append (a_ecf_path.name.to_string_8)
+				Result.append ("%"")
+				Result.append (" -target notebook_session")
+				Result.append (" -quick_melt")
+			else
+				-- INITIAL PATH: Need to freeze and C compile
+				Result.append (" -clean")
+				Result.append (" -config %"")
+				Result.append (a_ecf_path.name.to_string_8)
+				Result.append ("%"")
+				Result.append (" -target notebook_session")
+				Result.append (" -freeze")
+				Result.append (" -c_compile")
+			end
+		ensure
+			not_empty: not Result.is_empty
+		end
 
 feature {NONE} -- Debugging
 
