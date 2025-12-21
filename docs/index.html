@@ -14,7 +14,7 @@
         <h1>simple_notebook</h1>
         <p class="tagline">Interactive Eiffel Programming Environment</p>
         <div class="badges">
-            <span class="badge badge-version">v1.0.0-alpha.20</span>
+            <span class="badge badge-version">v1.0.0-alpha.34</span>
             <span class="badge badge-license">MIT</span>
         </div>
     </header>
@@ -32,12 +32,13 @@
         <section id="overview">
             <h2>Overview</h2>
             <p><strong>simple_notebook</strong> brings interactive programming to Eiffel with real-time streaming compiler output, automatic EiffelStudio detection, and DBC trace logging.</p>
+            <p><strong>New in Alpha 34:</strong> Multi-class support with full multiple inheritance - define CAR, BOAT, and CAR_BOAT classes interactively!</p>
             <p>Part of the <a href="https://github.com/simple-eiffel">Simple Eiffel</a> ecosystem.</p>
         </section>
         <section id="quick-start">
             <h2>Quick Start</h2>
             <h3>Windows Installation</h3>
-            <p>Download and run: <code>eiffel_notebook_setup_1.0.0-alpha.20.exe</code></p>
+            <p>Download and run: <code>eiffel_notebook_setup_1.0.0-alpha.34.exe</code></p>
             <h3>Linux Installation (Ubuntu/Debian)</h3>
             <p>Install EiffelStudio first, then build from source:</p>
 <pre><code># Install EiffelStudio
@@ -58,6 +59,8 @@ e[4]&gt; x * 2
         <section id="features">
             <h2>Key Features</h2>
             <div class="feature-grid">
+                <div class="feature-card"><h4>Multi-Class Support</h4><p>Define complete classes with multiple inheritance.</p></div>
+                <div class="feature-card"><h4>Class Editing</h4><p>Edit existing classes with <code>-class NAME</code>.</p></div>
                 <div class="feature-card"><h4>Cross-Platform</h4><p>Windows and Linux (Ubuntu/Debian).</p></div>
                 <div class="feature-card"><h4>Streaming Compilation</h4><p>Real-time compiler output.</p></div>
                 <div class="feature-card"><h4>Variable Persistence</h4><p>Attributes persist across cells.</p></div>
@@ -78,6 +81,7 @@ e[4]&gt; x * 2
                     <tr><td><code>-run</code></td><td>Re-execute all</td></tr>
                     <tr><td><code>-compile verbose</code></td><td>Stream output</td></tr>
                     <tr><td><code>-class</code></td><td>Show generated class</td></tr>
+                    <tr><td><code>-class NAME</code></td><td>Create or edit class</td></tr>
                 </tbody>
             </table>
         </section>
