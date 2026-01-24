@@ -1,0 +1,401 @@
+note
+	description: "[
+				SIMPLE_NOTEBOOK - Interactive Eiffel notebook environment
+		
+				Main facade for the simple_notebook library. Provides a clean API
+				for creating, editing, and executing Eiffel notebooks.
+		
+				Usage:
+					local
+						nb: SIMPLE_NOTEBOOK
+					do
+						create nb.make
+						nb.add_cell ("print (%"Hello, Eiffel!%")")
+						nb.execute_all
+						print (nb.output)
+					end
+	]"
+	author: "Claude"
+	date: "$Date$"
+	revision: "$Revision$"
+
+class interface
+	SIMPLE_NOTEBOOK
+
+create 
+	make
+			-- Create new notebook with default configuration
+		ensure
+			engine_created: engine /= Void
+
+	make_with_config (a_config: NOTEBOOK_CONFIG)
+			-- Create notebook with specific configuration
+		require
+			config_not_void: a_config /= Void
+		ensure
+			engine_created: engine /= Void
+
+	make_from_file (a_path: READABLE_STRING_GENERAL)
+			-- Open existing notebook from file
+		require
+			path_not_empty: a_path /= Void and then not a_path.is_empty
+
+feature -- Access
+
+	cell_count: INTEGER_32
+			-- Number of cells
+
+	config: NOTEBOOK_CONFIG
+			-- Current configuration
+
+	engine: NOTEBOOK_ENGINE
+			-- Underlying notebook engine
+
+	execution_time_ms: INTEGER_64
+			-- Last execution time in milliseconds
+
+	generating_type: TYPE [detachable SIMPLE_NOTEBOOK]
+			-- Type of current object
+			-- (type of which it is a direct instance)
+			-- (from ANY)
+		ensure -- from ANY
+			generating_type_not_void: Result /= Void
+
+	generator: STRING_8
+			-- Name of current object's generating class
+			-- (base class of the type of which it is a direct instance)
+			-- (from ANY)
+		ensure -- from ANY
+			generator_not_void: Result /= Void
+			generator_not_empty: not Result.is_empty
+
+	last_compiler_output: STRING_8
+			-- Compiler stdout/stderr from last execution (for verbose mode)
+
+	last_output: STRING_8
+			-- Output from most recently executed cell
+
+	output: STRING_8
+			-- Combined output from all executed cells
+
+	shared_variables: ARRAYED_LIST [VARIABLE_INFO]
+			-- Shared (cross-cell) variables
+
+	variable_count: INTEGER_32
+			-- Number of tracked variables
+
+	variables: ARRAYED_LIST [VARIABLE_INFO]
+			-- All tracked variables
+	
+feature -- Comparison
+
+	frozen deep_equal (a: detachable ANY; b: like arg #1): BOOLEAN
+			-- Are `a` and `b` either both void
+			-- or attached to isomorphic object structures?
+			-- (from ANY)
+		ensure -- from ANY
+			instance_free: class
+			shallow_implies_deep: standard_equal (a, b) implies Result
+			both_or_none_void: (a = Void) implies (Result = (b = Void))
+			same_type: (Result and (a /= Void)) implies (b /= Void and then a.same_type (b))
+			symmetric: Result implies deep_equal (b, a)
+
+	frozen equal (a: detachable ANY; b: like arg #1): BOOLEAN
+			-- Are `a` and `b` either both void or attached
+			-- to objects considered equal?
+			-- (from ANY)
+		ensure -- from ANY
+			instance_free: class
+			definition: Result = (a = Void and b = Void) or else ((a /= Void and b /= Void) and then a.is_equal (b))
+
+	frozen is_deep_equal alias "≡≡≡" (other: SIMPLE_NOTEBOOK): BOOLEAN
+			-- Are `Current` and `other` attached to isomorphic object structures?
+			-- (from ANY)
+		require -- from ANY
+			other_not_void: other /= Void
+		ensure -- from ANY
+			shallow_implies_deep: standard_is_equal (other) implies Result
+			same_type: Result implies same_type (other)
+			symmetric: Result implies other.is_deep_equal (Current)
+
+	is_equal (other: SIMPLE_NOTEBOOK): BOOLEAN
+			-- Is `other` attached to an object considered
+			-- equal to current object?
+			-- (from ANY)
+		require -- from ANY
+			other_not_void: other /= Void
+		ensure -- from ANY
+			symmetric: Result implies other ~ Current
+			consistent: standard_is_equal (other) implies Result
+
+	frozen standard_equal (a: detachable ANY; b: like arg #1): BOOLEAN
+			-- Are `a` and `b` either both void or attached to
+			-- field-by-field identical objects of the same type?
+			-- Always uses default object comparison criterion.
+			-- (from ANY)
+		ensure -- from ANY
+			instance_free: class
+			definition: Result = (a = Void and b = Void) or else ((a /= Void and b /= Void) and then a.standard_is_equal (b))
+
+	frozen standard_is_equal alias "≜" (other: SIMPLE_NOTEBOOK): BOOLEAN
+			-- Is `other` attached to an object of the same type
+			-- as current object, and field-by-field identical to it?
+			-- (from ANY)
+		require -- from ANY
+			other_not_void: other /= Void
+		ensure -- from ANY
+			same_type: Result implies same_type (other)
+			symmetric: Result implies other.standard_is_equal (Current)
+	
+feature -- Status report
+
+	conforms_to (other: ANY): BOOLEAN
+			-- Does type of current object conform to type
+			-- of `other` (as per Eiffel: The Language, chapter 13)?
+			-- (from ANY)
+		require -- from ANY
+			other_not_void: other /= Void
+
+	same_type (other: ANY): BOOLEAN
+			-- Is type of current object identical to type of `other`?
+			-- (from ANY)
+		require -- from ANY
+			other_not_void: other /= Void
+		ensure -- from ANY
+			definition: Result = (conforms_to (other) and other.conforms_to (Current))
+	
+feature -- Duplication
+
+	copy (other: SIMPLE_NOTEBOOK)
+			-- Update current object using fields of object attached
+			-- to `other`, so as to yield equal objects.
+			-- (from ANY)
+		require -- from ANY
+			other_not_void: other /= Void
+			type_identity: same_type (other)
+		ensure -- from ANY
+			is_equal: Current ~ other
+
+	frozen deep_copy (other: SIMPLE_NOTEBOOK)
+			-- Effect equivalent to that of:
+			--		`copy` (`other` . `deep_twin`)
+			-- (from ANY)
+		require -- from ANY
+			other_not_void: other /= Void
+		ensure -- from ANY
+			deep_equal: deep_equal (Current, other)
+
+	frozen deep_twin: SIMPLE_NOTEBOOK
+			-- New object structure recursively duplicated from Current.
+			-- (from ANY)
+		ensure -- from ANY
+			deep_twin_not_void: Result /= Void
+			deep_equal: deep_equal (Current, Result)
+
+	frozen standard_copy (other: SIMPLE_NOTEBOOK)
+			-- Copy every field of `other` onto corresponding field
+			-- of current object.
+			-- (from ANY)
+		require -- from ANY
+			other_not_void: other /= Void
+			type_identity: same_type (other)
+		ensure -- from ANY
+			is_standard_equal: standard_is_equal (other)
+
+	frozen standard_twin: SIMPLE_NOTEBOOK
+			-- New object field-by-field identical to `other`.
+			-- Always uses default copying semantics.
+			-- (from ANY)
+		ensure -- from ANY
+			standard_twin_not_void: Result /= Void
+			equal: standard_equal (Result, Current)
+
+	frozen twin: SIMPLE_NOTEBOOK
+			-- New object equal to `Current`
+			-- `twin` calls `copy`; to change copying/twinning semantics, redefine `copy`.
+			-- (from ANY)
+		ensure -- from ANY
+			twin_not_void: Result /= Void
+			is_equal: Result ~ Current
+	
+feature -- Basic operations
+
+	frozen default: detachable SIMPLE_NOTEBOOK
+			-- Default value of object's type
+			-- (from ANY)
+
+	frozen default_pointer: POINTER
+			-- Default value of type `POINTER`
+			-- (Avoid the need to write `p`.`default` for
+			-- some `p` of type `POINTER`.)
+			-- (from ANY)
+		ensure -- from ANY
+			instance_free: class
+
+	default_rescue
+			-- Process exception for routines with no Rescue clause.
+			-- (Default: do nothing.)
+			-- (from ANY)
+
+	frozen do_nothing
+			-- Execute a null action.
+			-- (from ANY)
+		ensure -- from ANY
+			instance_free: class
+	
+feature -- Change Tracking
+
+	add_cell (a_code: STRING_8): STRING_8
+			-- Add code cell and return cell ID
+		require
+			code_not_void: a_code /= Void
+		ensure
+			cell_added: cell_count = old cell_count + 1
+
+	add_markdown (a_content: STRING_8): STRING_8
+			-- Add markdown cell and return cell ID
+		require
+			content_not_void: a_content /= Void
+
+	cell_code (a_id: STRING_8): STRING_8
+			-- Get code for cell
+		require
+			id_valid: a_id /= Void and then not a_id.is_empty
+
+	cell_output (a_id: STRING_8): STRING_8
+			-- Get output for cell
+		require
+			id_valid: a_id /= Void and then not a_id.is_empty
+
+	has_variable_changes: BOOLEAN
+			-- Were there any variable changes since last save?
+
+	remove_cell (a_id: STRING_8)
+			-- Remove cell by ID
+		require
+			id_valid: a_id /= Void and then not a_id.is_empty
+
+	save_variable_state
+			-- Save current variable state for later comparison
+
+	update_cell (a_id: STRING_8; a_code: STRING_8)
+			-- Update cell code
+		require
+			id_valid: a_id /= Void and then not a_id.is_empty
+			code_not_void: a_code /= Void
+
+	variable_changes: ARRAYED_LIST [VARIABLE_CHANGE]
+			-- Get changes since last save_variable_state call
+	
+feature -- Execution
+
+	execute (a_id: STRING_8)
+			-- Execute specific cell
+		require
+			id_valid: a_id /= Void and then not a_id.is_empty
+
+	execute_all
+			-- Execute all cells
+
+	execute_from (a_id: STRING_8)
+			-- Execute from given cell to end
+		require
+			id_valid: a_id /= Void and then not a_id.is_empty
+	
+feature -- File Operations
+
+	new_notebook
+			-- Start fresh notebook
+		ensure
+			empty: cell_count = 0
+			no_variables: variable_count = 0
+
+	open (a_path: READABLE_STRING_GENERAL)
+			-- Open notebook from file
+		require
+			path_valid: a_path /= Void and then not a_path.is_empty
+
+	save
+			-- Save to current file
+		require
+			has_file: has_file
+		ensure
+			not_dirty: not is_dirty
+
+	save_as (a_path: READABLE_STRING_GENERAL)
+			-- Save to new file
+		require
+			path_valid: a_path /= Void and then not a_path.is_empty
+		ensure
+			not_dirty: not is_dirty
+			has_file: has_file
+	
+feature -- Output
+
+	Io: STD_FILES
+			-- Handle to standard file setup
+			-- (from ANY)
+		ensure -- from ANY
+			instance_free: class
+			io_not_void: Result /= Void
+
+	out: STRING_8
+			-- New string containing terse printable representation
+			-- of current object
+			-- (from ANY)
+		ensure -- from ANY
+			out_not_void: Result /= Void
+
+	print (o: detachable ANY)
+			-- Write terse external representation of `o`
+			-- on standard output.
+			-- (from ANY)
+		ensure -- from ANY
+			instance_free: class
+
+	frozen tagged_out: STRING_8
+			-- New string containing terse printable representation
+			-- of current object
+			-- (from ANY)
+		ensure -- from ANY
+			tagged_out_not_void: Result /= Void
+	
+feature -- Platform
+
+	Operating_environment: OPERATING_ENVIRONMENT
+			-- Objects available from the operating system
+			-- (from ANY)
+		ensure -- from ANY
+			instance_free: class
+			operating_environment_not_void: Result /= Void
+	
+feature -- Quick API
+
+	print_variables
+			-- Print all variables to stdout
+
+	run (a_code: STRING_8): STRING_8
+			-- Quick execute: add cell, run it, return output
+		require
+			code_not_void: a_code /= Void
+	
+feature -- Status
+
+	file_path: detachable STRING_8
+			-- Current file path (if any)
+
+	has_file: BOOLEAN
+			-- Is notebook associated with a file?
+
+	is_dirty: BOOLEAN
+			-- Has notebook been modified?
+	
+invariant
+	engine_not_void: engine /= Void
+
+		-- from ANY
+	reflexive_equality: standard_is_equal (Current)
+	reflexive_conformance: conforms_to (Current)
+
+end -- class SIMPLE_NOTEBOOK
+
