@@ -1,5 +1,8 @@
 # EiffelNotebook Vision
 
+
+**Date**: 2025-12-18
+
 **Interactive notebook environment for Eiffel, inspired by Jupyter Notebooks**
 
 *Proposed by: Javier Hector (+1 Eric Bezault) - December 2024*
