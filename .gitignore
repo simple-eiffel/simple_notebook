@@ -29,3 +29,5 @@ Thumbs.db
 
 exception_trace.log
 test_workspace/
+*.epr
+*.log
