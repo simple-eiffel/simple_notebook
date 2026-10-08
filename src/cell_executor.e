@@ -253,8 +253,13 @@ feature {NONE} -- Execution
 
 			l_elapsed_ms := elapsed_milliseconds (l_start_time)
 
-			-- Convert output to STRING
-			l_stdout := l_output.to_string_8
+			-- The raw bytes, as before simple_process 1.1.0 decoded the output
+			-- (`to_string_8' of the decoded text fails above U+00FF).
+			if attached process.last_output_bytes as al_bytes then
+				l_stdout := al_bytes.twin
+			else
+				create l_stdout.make_empty
+			end
 			create l_stderr.make_empty
 
 			-- DEBUG: Uncomment to trace execution issues
@@ -406,7 +411,6 @@ feature {NONE} -- Helpers
 						if verbose_compile then
 							print (chunk)
 						end
-						Result.append (chunk.to_string_8)
 					end
 					-- Small sleep to avoid busy-waiting (100ms)
 					l_env.sleep (100_000_000)
@@ -417,8 +421,10 @@ feature {NONE} -- Helpers
 					if verbose_compile then
 						print (final_chunk)
 					end
-					Result.append (final_chunk.to_string_8)
 				end
+					-- The raw bytes, as before simple_process 1.1.0 decoded the
+					-- output (`to_string_8' of the decoded text fails above U+00FF).
+				Result.append (l_async.accumulated_bytes)
 
 				l_async.close
 			else
