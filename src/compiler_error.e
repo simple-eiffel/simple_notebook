@@ -251,7 +251,6 @@ feature {NONE} -- Formatting Helpers
 			-- For smarter underlining
 		local
 			i, l_start: INTEGER
-			l_in_token: BOOLEAN
 		do
 			-- Skip leading whitespace (already trimmed, but just in case)
 			from i := 1 until i > a_line.count or else not a_line.item (i).is_space loop

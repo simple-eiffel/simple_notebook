@@ -268,7 +268,6 @@ feature -- Test: NOTEBOOK Creation
 			nb: NOTEBOOK
 			code_cells: ARRAYED_LIST [NOTEBOOK_CELL]
 			l_cell: NOTEBOOK_CELL
-			l_save_result: BOOLEAN
 		do
 			create nb.make ("Test")
 			l_cell := nb.add_code_cell ("code 1")
@@ -307,7 +306,6 @@ feature -- Test: NOTEBOOK JSON
 			nb, loaded: NOTEBOOK
 			json: SIMPLE_JSON_OBJECT
 			l_cell: NOTEBOOK_CELL
-			l_save_result: BOOLEAN
 		do
 			create nb.make ("My Analysis")
 			l_cell := nb.add_code_cell ("x := 42")
