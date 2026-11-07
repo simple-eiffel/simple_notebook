@@ -44,6 +44,9 @@ feature -- Access
 			-- Paths of user class files from last compilation
 			-- Used for cleanup on next run
 
+	Start_failed_exit_code: INTEGER = -1
+			-- Exit code of a result whose program could not start.
+
 feature -- Settings
 
 	set_verbose_compile (a_verbose: BOOLEAN)
@@ -265,10 +268,18 @@ feature {NONE} -- Execution
 			-- DEBUG: Uncomment to trace execution issues
 			-- print ("DEBUG EXECUTOR: final stdout=[" + l_stdout + "]%N")
 
-			if process.exit_code = 0 then
+			if not process.was_successful then
+					-- The program never started, so it has no exit code of its own.
+				if attached process.last_error as al_reason and then not al_reason.is_empty then
+					l_stderr := {UTF_CONVERTER}.string_32_to_utf_8_string_8 (al_reason)
+				else
+					l_stderr := "Could not start " + a_exe_path.utf_8_name
+				end
+				create Result.make_runtime_error (l_stderr, Start_failed_exit_code, l_elapsed_ms)
+			elseif process.last_exit_code = 0 then
 				create Result.make_success (l_stdout, l_elapsed_ms)
 			else
-				create Result.make_runtime_error (l_stderr, process.exit_code, l_elapsed_ms)
+				create Result.make_runtime_error (l_stderr, process.last_exit_code, l_elapsed_ms)
 			end
 		end
 

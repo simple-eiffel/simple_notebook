@@ -329,6 +329,40 @@ feature -- Test: COMPILER_ERROR_PARSER
 
 feature -- Test: CELL_EXECUTOR (Integration - requires ec.exe)
 
+	test_failing_program_is_a_runtime_error
+			-- A program that exits non-zero gives a failed result with its exit code.
+		local
+			l_executor: INSPECTABLE_EXECUTOR
+			l_config: NOTEBOOK_CONFIG
+			l_result: EXECUTION_RESULT
+		do
+			create l_config.make_with_defaults
+			l_config.set_workspace_dir (create {PATH}.make_from_string ("."))
+			create l_executor.make (l_config)
+			if {PLATFORM}.is_windows then
+				l_result := l_executor.execute_compiled (create {PATH}.make_from_string ("C:/Windows/System32/where.exe"))
+			else
+				l_result := l_executor.execute_compiled (create {PATH}.make_from_string ("/usr/bin/false"))
+			end
+			assert ("failed", not l_result.execution_succeeded)
+			assert ("exit code kept", l_result.exit_code /= 0)
+		end
+
+	test_missing_program_is_a_runtime_error
+			-- A program that cannot start at all gives a failed result, not a success.
+		local
+			l_executor: INSPECTABLE_EXECUTOR
+			l_config: NOTEBOOK_CONFIG
+			l_result: EXECUTION_RESULT
+		do
+			create l_config.make_with_defaults
+			l_config.set_workspace_dir (create {PATH}.make_from_string ("."))
+			create l_executor.make (l_config)
+			l_result := l_executor.execute_compiled (create {PATH}.make_from_string ("no_such_dir/no_such_program"))
+			assert ("failed", not l_result.execution_succeeded)
+			assert ("reason given", not l_result.stderr.is_empty)
+		end
+
 	test_executor_creation
 			-- Test creating executor
 		local
