@@ -109,6 +109,7 @@ feature {NONE} -- Test Runners
 		do
 			print ("%N=== Compilation Tests ===%N")
 			create t
+			run_test (agent t.test_failing_program_is_a_runtime_error, "test_failing_program_is_a_runtime_error")
 			run_test (agent t.test_compiler_error_creation, "test_compiler_error_creation")
 			run_test (agent t.test_compiler_error_mapping, "test_compiler_error_mapping")
 			run_test (agent t.test_compiler_error_formatted_message, "test_compiler_error_formatted_message")

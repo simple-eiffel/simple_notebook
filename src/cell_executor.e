@@ -265,10 +265,10 @@ feature {NONE} -- Execution
 			-- DEBUG: Uncomment to trace execution issues
 			-- print ("DEBUG EXECUTOR: final stdout=[" + l_stdout + "]%N")
 
-			if process.exit_code = 0 then
+			if process.last_exit_code = 0 then
 				create Result.make_success (l_stdout, l_elapsed_ms)
 			else
-				create Result.make_runtime_error (l_stderr, process.exit_code, l_elapsed_ms)
+				create Result.make_runtime_error (l_stderr, process.last_exit_code, l_elapsed_ms)
 			end
 		end
 
