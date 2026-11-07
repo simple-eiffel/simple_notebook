@@ -44,8 +44,11 @@ feature -- Access
 			-- Paths of user class files from last compilation
 			-- Used for cleanup on next run
 
-	Start_failed_exit_code: INTEGER = -1
-			-- Exit code of a result whose program could not start.
+	Start_failed_exit_code: INTEGER
+			-- Exit code of a result whose program could not start: SIMPLE_PROCESS's own.
+		do
+			Result := {SIMPLE_PROCESS}.Start_failed_exit_code
+		end
 
 feature -- Settings
 

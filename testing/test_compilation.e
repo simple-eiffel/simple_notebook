@@ -361,6 +361,7 @@ feature -- Test: CELL_EXECUTOR (Integration - requires ec.exe)
 			l_result := l_executor.execute_compiled (create {PATH}.make_from_string ("no_such_dir/no_such_program"))
 			assert ("failed", not l_result.execution_succeeded)
 			assert ("reason given", not l_result.stderr.is_empty)
+			assert ("start failure code", l_result.exit_code = {SIMPLE_PROCESS}.Start_failed_exit_code)
 		end
 
 	test_executor_creation
