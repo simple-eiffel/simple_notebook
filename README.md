@@ -9,6 +9,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Eiffel](https://img.shields.io/badge/Eiffel-25.02-blue.svg)](https://www.eiffel.org/)
 [![Design by Contract](https://img.shields.io/badge/DbC-enforced-orange.svg)]()
+![Windows: tests pass](https://img.shields.io/badge/Windows-tests%20pass-0078D6?logo=windows&logoColor=white) ![Linux: tests pass](https://img.shields.io/badge/Linux-tests%20pass-FCC624?logo=linux&logoColor=black) ![macOS: tests pass](https://img.shields.io/badge/macOS-tests%20pass-000000?logo=apple&logoColor=white)
 
 Interactive Eiffel notebook environment - execute code cells with persistent state, streaming compiler output, and DBC trace logging.
 
@@ -153,7 +154,6 @@ end
 ...
 Class CAR updated in cell 1.
 ```
-
 
 ### Opening in EiffelStudio
 
@@ -355,7 +355,6 @@ export SIMPLE_EIFFEL=$HOME/simple_eiffel
 # Run notebook
 ~/simple_eiffel/simple_notebook/EIFGENs/notebook_cli/W_code/simple_notebook
 ```
-
 
 ### Library Usage
 
