@@ -128,10 +128,11 @@ feature -- Test: VARIABLE_CHANGE
 			create change.make_new ("count", "INTEGER", "42")
 			formatted := change.formatted
 
-			assert ("has marker", formatted.starts_with ("+"))
-			assert ("has name", formatted.has_substring ("count"))
-			assert ("has type", formatted.has_substring ("INTEGER"))
+				-- The format since alpha.23 (3714dca): "  count: 42  (new)"; the type shows only
+				-- when there is no value. This test ran in no gate until port-coordination #17.
+			assert ("indented name", formatted.starts_with ("  count: "))
 			assert ("has value", formatted.has_substring ("42"))
+			assert ("says new", formatted.has_substring ("(new)"))
 		end
 
 feature -- Test: VARIABLE_TRACKER - Extraction
