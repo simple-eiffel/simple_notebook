@@ -201,12 +201,25 @@ feature {NONE} -- Platform-specific paths
 		end
 
 	compiler_relative_path: STRING
-			-- Relative path from ISE_EIFFEL to ec executable
+			-- Relative path from ISE_EIFFEL to ec executable: studio/spec/<platform>/bin, where
+			-- <platform> is ISE_PLATFORM when it is set (EiffelStudio's own name for the folder),
+			-- else this system's usual one. macOS's is macosx-x86-64 (port-coordination #17: the
+			-- Linux folder was assumed on every non-Windows system, so the Mac never found ec).
+		local
+			l_platform: STRING
 		do
-			if is_windows then
-				Result := "/studio/spec/win64/bin/ec.exe"
+			if attached env.item ("ISE_PLATFORM") as al_platform and then not al_platform.is_empty then
+				l_platform := al_platform.to_string_8
+			elseif is_windows then
+				l_platform := "win64"
+			elseif (create {PLATFORM}).is_mac then
+				l_platform := "macosx-x86-64"
 			else
-				Result := "/studio/spec/linux-x86-64/bin/ec"
+				l_platform := "linux-x86-64"
+			end
+			Result := "/studio/spec/" + l_platform + "/bin/ec"
+			if is_windows then
+				Result.append (".exe")
 			end
 		end
 
